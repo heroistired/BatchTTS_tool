@@ -1,0 +1,51 @@
+【】
+帮我在根目录建立一个GradioAPI.py的脚本，其功能为：
+1、有若干API函数（后续不断扩充），可以被外部调用
+2、代码内部有一个测试这些API函数的测试函数，直接运行此API时，会出现选项，用户可以选择测试某个函数，或者全部测试，或者推出
+3、测试选项的明明方式为函数名+函数的功能（由你总结）
+4、API函数的名字规则为TTS_API_xxx
+5、第一步，实现一个函数：TTS_API_change_choices，按照下述文档：
+client = Client("http://192.168.31.194:9872/")
+result = client.predict(
+		api_name="/change_choices"
+)
+print(result)
+
+Accepts 0 parameters:
+Returns tuple of 2 elements
+[0] Literal['GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth', 'GPT_SoVITS/pretrained_models/gsv-v4-pretrained/s2Gv4.pth', 'GPT_SoVITS/pretrained_models/s2G488k.pth', 'GPT_SoVITS/pretrained_models/s2Gv3.pth', 'SoVITS_weights_v4/chenhuanVoice_e1_s176_l32.pth', 'SoVITS_weights_v4/chenhuanVoice_e2_s352_l32.pth']
+
+The output value that appears in the "SoVITS模型列表" Dropdown component.
+
+[1] Literal['GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt', 'GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt', 'GPT_SoVITS/pretrained_models/s1v3.ckpt', 'GPT_SoVITS/pretrained_models/s1v3.ckpt', 'GPT_weights_v4/chenhuanVoice-e5.ckpt', 'GPT_weights_v4/chenhuanVoice-e10.ckpt', 'GPT_weights_v4/chenhuanVoice-e15.ckpt']
+
+The output value that appears in the "GPT模型列表" Dropdown component.
+
+5.1、你需要做一点调整，函数接收一个参数，表明服务器地址，函数输出一个json，上述2个elements
+
+【】
+根目录的GradioAPI.py增加一个函数，名为TTS_API_/get_tts_wav，其功能为：
+1、按照如下文档构建：但将相关输入和输出信息封装成json的方式输入和输出
+
+【】
+根目录的GradioAPI.py增加一个函数，名为TTS_API_change_gpt_weights，其功能为：
+1、按照如下文档构建：但将相关输入和输出信息封装成json的方式输入和输出
+api_name: /change_gpt_weights
+copy
+from gradio_client import Client
+
+client = Client("http://192.168.31.194:9872/")
+result = client.predict(
+		gpt_path="GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt",
+		api_name="/change_gpt_weights"
+)
+print(result)
+Accepts 1 parameter:
+gpt_path Literal['GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt', 'GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt', 'GPT_SoVITS/pretrained_models/s1v3.ckpt', 'GPT_SoVITS/pretrained_models/s1v3.ckpt', 'GPT_weights_v4/chenhuanVoice-e5.ckpt', 'GPT_weights_v4/chenhuanVoice-e10.ckpt', 'GPT_weights_v4/chenhuanVoice-e15.ckpt'] Default: "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
+
+The input value that is provided in the "GPT模型列表" Dropdown component.
+
+Returns 1 element
+
+
+https://github.com/heroistired/BatchTTS_tool
