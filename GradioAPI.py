@@ -1,13 +1,17 @@
 import json
 from gradio_client import Client
 
-def TTS_API_change_choices(server_url):
+def TTS_API_change_choices(server_url, client=None):
     """
     获取服务器上的模型列表
     :param server_url: 服务器地址，如 http://192.168.31.194:9872/
+    :param client: 可选的Client对象，如果提供则使用，否则创建新的
     :return: JSON格式的模型列表，包含SoVITS模型列表和GPT模型列表
     """
-    client = Client(server_url)
+    # 如果没有提供client，则创建新的
+    if client is None:
+        client = Client(server_url)
+    
     try:
         result = client.predict(
             api_name="/change_choices"
@@ -32,7 +36,7 @@ def TTS_API_change_choices(server_url):
             "gpt_model_list": []
         }
 
-def TTS_API_get_tts_wav(server_url, input_params):
+def TTS_API_get_tts_wav(server_url, input_params, client=None):
     """
     调用TTS服务生成语音文件
     :param server_url: 服务器地址，如 http://192.168.31.194:9872/
@@ -53,6 +57,7 @@ def TTS_API_get_tts_wav(server_url, input_params):
         - sample_steps: 采样步数（默认：8）
         - if_sr: 是否开启超分（默认：False）
         - pause_second: 句间停顿秒数（默认：0.3）
+    :param client: 可选的Client对象，如果提供则使用，否则创建新的
     :return: JSON格式的输出结果，包含生成的语音文件路径和本地拷贝路径
     """
     import os
@@ -60,7 +65,9 @@ def TTS_API_get_tts_wav(server_url, input_params):
     from datetime import datetime
     from gradio_client import file
     
-    client = Client(server_url)
+    # 如果没有提供client，则创建新的
+    if client is None:
+        client = Client(server_url)
     
     # 设置默认参数（与服务器端保持一致）
     default_params = {
@@ -151,7 +158,7 @@ def TTS_API_get_tts_wav(server_url, input_params):
             "local_audio_path": None
         }
 
-def TTS_API_change_sovits_weights(server_url, input_params):
+def TTS_API_change_sovits_weights(server_url, input_params, client=None):
     """
     切换SoVITS模型权重
     :param server_url: 服务器地址，如 http://192.168.31.194:9872/
@@ -159,9 +166,12 @@ def TTS_API_change_sovits_weights(server_url, input_params):
         - sovits_path: SoVITS模型路径（默认："GPT_SoVITS/pretrained_models/s2G488k.pth"）
         - prompt_language: 参考音频的语种（默认："中文"）
         - text_language: 需要合成的语种（默认："中文"）
+    :param client: 可选的Client对象，如果提供则使用，否则创建新的
     :return: JSON格式的输出结果，包含服务器返回的10个元素
     """
-    client = Client(server_url)
+    # 如果没有提供client，则创建新的
+    if client is None:
+        client = Client(server_url)
     
     # 设置默认参数
     default_params = {
@@ -216,15 +226,18 @@ def TTS_API_change_sovits_weights(server_url, input_params):
             "requested_sovits_path": merged_params["sovits_path"]  # 添加请求的模型路径，用于验证
         }
 
-def TTS_API_change_gpt_weights(server_url, input_params):
+def TTS_API_change_gpt_weights(server_url, input_params, client=None):
     """
     切换GPT模型权重
     :param server_url: 服务器地址，如 http://192.168.31.194:9872/
     :param input_params: JSON格式的输入参数，包含以下字段：
         - gpt_path: GPT模型路径（默认："GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"）
+    :param client: 可选的Client对象，如果提供则使用，否则创建新的
     :return: JSON格式的输出结果，包含服务器返回的结果
     """
-    client = Client(server_url)
+    # 如果没有提供client，则创建新的
+    if client is None:
+        client = Client(server_url)
     
     # 设置默认参数
     default_params = {

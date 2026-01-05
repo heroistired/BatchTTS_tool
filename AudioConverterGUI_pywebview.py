@@ -491,6 +491,12 @@ class AudioConverterGUI:
                 }
                 self.tasks.append(task)
             
+            # 将所有对象的text字段抽取出来保存为同名的.txt文件
+            txt_file_path = os.path.splitext(file_path)[0] + '.txt'
+            with open(txt_file_path, 'w', encoding='utf-8') as f:
+                for item in json_data:
+                    f.write(item["text"] + '\n')
+            
             return {
                 "success": True,
                 "file_path": file_path,
@@ -582,21 +588,24 @@ class AudioConverterGUI:
                         self.window.evaluate_js(f"document.getElementById('duration-{original_index}').value = {duration}")
                         
                         # 更新日志
-                        self.window.evaluate_js(f"add_log('✅ 第 {i+1}/{total_pending} 条转换成功，时长: {duration}秒')")
+                        message = f"✅ 第 {i+1}/{total_pending} 条转换成功，时长: {duration}秒"
+                        self.window.evaluate_js(f"add_log({json.dumps(message)})")
                     else:
                         # 转换失败
                         error_count += 1
                         task_results.append({"success": False, "error": result["error"], "index": original_index})
                         
                         # 更新日志
-                        self.window.evaluate_js(f"add_log('❌ 第 {i+1}/{total_pending} 条转换失败: {result['error']}')")
+                        error_message = f"❌ 第 {i+1}/{total_pending} 条转换失败: {result['error']}"
+                        self.window.evaluate_js(f"add_log({json.dumps(error_message)})")
                         
                 except Exception as e:
                     error_count += 1
                     task_results.append({"success": False, "error": str(e), "index": original_index})
                     
                     # 更新日志
-                    self.window.evaluate_js(f"add_log('❌ 第 {i+1}/{total_pending} 条转换异常: {str(e)}')")
+                    error_message = f"❌ 第 {i+1}/{total_pending} 条转换异常: {str(e)}"
+                    self.window.evaluate_js(f"add_log({json.dumps(error_message)})")
             
             return {
                 "success": True,

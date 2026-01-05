@@ -30,7 +30,13 @@ class AudioConverter:
         :param server_url: Gradio服务器地址
         """
         self.server_url = server_url
-        self.default_ref_wav = "d:\\05 SelfMidea\\98 SelfDevelopedTools\\01 BatchTTS_tool\\ref.WAV"
+        # 使用相对路径查找ref.WAV文件
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.default_ref_wav = os.path.join(current_dir, "ref.WAV")
+        # 创建共享的Client对象，避免每次API调用都创建新的连接
+        from gradio_client import Client
+        self.client = Client(server_url)
     
     def ConvertBySingleText(self, text):
         """
@@ -38,9 +44,9 @@ class AudioConverter:
         :param text: 要转换的文本字符串
         :return: 语音生成结果，包含输出文件路径等信息
         """
-        print(f"\n🚀 开始转换文本为语音")
-        print(f"📝 输入文本: {text}")
-        print(f"📋 服务器地址: {self.server_url}")
+        print(f"\n开始转换文本为语音")
+        print(f"输入文本: {text}")
+        print(f"服务器地址: {self.server_url}")
         
         try:
             # 1. 调用TTS_API_change_sovits_weights设置SoVITS模型权重
@@ -50,16 +56,16 @@ class AudioConverter:
                 "prompt_language": "中文",
                 "text_language": "中文"
             }
-            sovits_result = TTS_API_change_sovits_weights(self.server_url, sovits_params)
-            print(f"✅ SoVITS模型权重设置完成: {sovits_result.get('requested_sovits_path')}")
+            sovits_result = TTS_API_change_sovits_weights(self.server_url, sovits_params, self.client)
+            print(f"SoVITS模型权重设置完成: {sovits_result.get('requested_sovits_path')}")
             
             # 2. 调用TTS_API_change_gpt_weights设置GPT模型权重
             print("\n2. 设置GPT模型权重...")
             gpt_params = {
                 "gpt_path": "GPT_weights_v4/chenhuanVoice-e15.ckpt"
             }
-            gpt_result = TTS_API_change_gpt_weights(self.server_url, gpt_params)
-            print(f"✅ GPT模型权重设置完成")
+            gpt_result = TTS_API_change_gpt_weights(self.server_url, gpt_params, self.client)
+            print(f"GPT模型权重设置完成")
             
             # 3. 调用TTS_API_get_tts_wav生成语音
             print("\n3. 生成语音...")
@@ -82,14 +88,14 @@ class AudioConverter:
                 "text": text  # 添加外部传入的文本参数
             }
             
-            tts_result = TTS_API_get_tts_wav(self.server_url, tts_params)
-            print(f"✅ 语音生成完成")
+            tts_result = TTS_API_get_tts_wav(self.server_url, tts_params, self.client)
+            print(f"语音生成完成")
             
             # 返回生成结果
             return tts_result
             
         except Exception as e:
-            print(f"❌ 文本转语音失败: {str(e)}")
+            print(f"文本转语音失败: {str(e)}")
             import traceback
             traceback.print_exc()
             return {
