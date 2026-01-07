@@ -64,6 +64,8 @@ def TTS_API_get_tts_wav(server_url, input_params, client=None):
     import shutil
     from datetime import datetime
     from gradio_client import file
+    from urllib.parse import urlparse
+    import urllib.request
     
     # 如果没有提供client，则创建新的
     if client is None:
@@ -141,17 +143,62 @@ def TTS_API_get_tts_wav(server_url, input_params, client=None):
             target_filename = f"{current_time}.wav"
             target_path = os.path.join(output_dir, target_filename)
             
-            # 拷贝文件
-            shutil.copy2(result, target_path)
+            # 判断返回结果是URL还是本地路径
+            parsed = urlparse(result)
             
-            # 在输出JSON中添加拷贝后的文件路径
-            output_json["local_audio_path"] = target_path
+            if parsed.scheme in ('http', 'https'):
+                # 如果是URL，下载文件
+                try:
+                    urllib.request.urlretrieve(result, target_path)
+                    output_json["local_audio_path"] = target_path
+                except Exception as download_error:
+                    output_json["error"] = f"下载文件失败: {str(download_error)}"
+                    return output_json
+            elif os.path.exists(result):
+                # 如果是本地路径且文件存在，直接拷贝
+                shutil.copy2(result, target_path)
+                output_json["local_audio_path"] = target_path
+            else:
+                # 修复打包环境下可能不完整的路径
+                # 检查是否需要修复路径分隔符
+                fixed_path = result.replace('/', '\\')
+                # 尝试在常见临时目录中查找
+                temp_base = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Windows\\Temp'))
+                
+                # 如果路径不完整，尝试找到正确的完整路径
+                if not os.path.exists(result):
+                    # 尝试直接在temp目录中查找
+                    temp_file_path = os.path.join(temp_base, os.path.basename(result))
+                    if os.path.exists(temp_file_path):
+                        shutil.copy2(temp_file_path, target_path)
+                        output_json["local_audio_path"] = target_path
+                    else:
+                        # 尝试查找包含_MEI的目录
+                        for root, dirs, files in os.walk(temp_base):
+                            if '_MEI' in root and result.split(os.sep)[-1] in files:
+                                source_path = os.path.join(root, result.split(os.sep)[-1])
+                                if os.path.exists(source_path):
+                                    shutil.copy2(source_path, target_path)
+                                    output_json["local_audio_path"] = target_path
+                                    break
+                        else:
+                            # 如果仍然找不到，尝试使用fixed_path
+                            if os.path.exists(fixed_path):
+                                shutil.copy2(fixed_path, target_path)
+                                output_json["local_audio_path"] = target_path
+                            else:
+                                output_json["error"] = f"文件不存在: {result}"
+                else:
+                    shutil.copy2(result, target_path)
+                    output_json["local_audio_path"] = target_path
         
         return output_json
     except Exception as e:
         # 增强错误处理
         error_msg = f"API调用失败: {str(e)}"
         print(error_msg)
+        import traceback
+        traceback.print_exc()
         return {
             "error": error_msg,
             "output_wav_path": None,

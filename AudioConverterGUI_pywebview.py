@@ -487,7 +487,9 @@ class AudioConverterGUI:
                     "text": item["text"],
                     "duration": 0,
                     "status": "未通过",
-                    "audio_path": None
+                    "audio_path": None,
+                    "chapter": item.get("Chapter", ""),
+                    "description": item.get("Description", "")
                 }
                 self.tasks.append(task)
             
@@ -777,7 +779,9 @@ class AudioConverterGUI:
                 export_info.append({
                     "text": task["text"],
                     "audio": audio_filename,
-                    "duration": task["duration"]
+                    "duration": task["duration"],
+                    "chapter": task["chapter"],
+                    "description": task["description"]
                 })
             
             export_info_path = "ExportAudioInfo.json"

@@ -358,13 +358,35 @@ class TextCompareGUI:
                 if (result.success) {
                     const markdownDisplay = document.getElementById('markdown-display');
                     const content = result.highlighted_content;
-                    const position = result.position;
                     
                     markdownDisplay.innerHTML = content;
                     
-                    // 滚动到高亮位置
-                    const rect = markdownDisplay.getBoundingClientRect();
-                    markdownDisplay.scrollTop = position - rect.height / 2;
+                    // 滚动到高亮位置，使其位于显示框中间
+                    setTimeout(() => {
+                        // 找到所有高亮元素
+                        const highlightElements = markdownDisplay.querySelectorAll('span[style*="color: red; font-weight: bold;"]');
+                        if (highlightElements.length > 0) {
+                            const targetElement = highlightElements[0];
+                            const elementRect = targetElement.getBoundingClientRect();
+                            const displayRect = markdownDisplay.getBoundingClientRect();
+                            
+                            // 计算滚动位置，使高亮元素居中
+                            const scrollTo = markdownDisplay.scrollTop + elementRect.top - displayRect.top - displayRect.height / 2 + elementRect.height / 2;
+                            markdownDisplay.scrollTop = scrollTo;
+                        } else {
+                            // 如果没有找到红色高亮，尝试找到蓝色高亮
+                            const blueElements = markdownDisplay.querySelectorAll('span[style*="color: blue; font-weight: bold;"]');
+                            if (blueElements.length > 0) {
+                                const targetElement = blueElements[0];
+                                const elementRect = targetElement.getBoundingClientRect();
+                                const displayRect = markdownDisplay.getBoundingClientRect();
+                                
+                                // 计算滚动位置，使高亮元素居中
+                                const scrollTo = markdownDisplay.scrollTop + elementRect.top - displayRect.top - displayRect.height / 2 + elementRect.height / 2;
+                                markdownDisplay.scrollTop = scrollTo;
+                            }
+                        }
+                    }, 100); // 延迟执行，确保DOM已更新
                     
                     add_log(`✅ 文本定位成功，匹配字符: ${targetStr}，字数1: ${count1}，字数2: ${count2}`);
                 } else {
@@ -376,44 +398,52 @@ class TextCompareGUI:
                     // 创建加粗显示的文本
                     const highlightedText = originalText.replace(targetStr, `<span style="font-weight: bold;">${targetStr}</span>`);
                     
-                    // 处理div元素
+                    // 确保只有一个显示元素（要么是div，要么是textarea）
                     if (divElement) {
-                        // 直接更新div内容
+                        // 如果已经有div元素，直接更新其内容
                         divElement.innerHTML = highlightedText;
                         divElement.style.height = currentHeight;
                     } else if (textArea) {
-                        // 创建一个替换的div元素
-                        const newDiv = document.createElement('div');
-                        newDiv.id = `text-div-${index}`;
-                        newDiv.className = 'text-input';
-                        newDiv.contentEditable = true;
-                        newDiv.style.width = '100%';
-                        newDiv.style.height = currentHeight;
-                        newDiv.style.resize = 'vertical';
-                        newDiv.style.padding = '5px';
-                        newDiv.style.fontFamily = 'Arial, sans-serif';
-                        newDiv.style.fontSize = '14px';
-                        newDiv.style.border = '1px solid #ddd';
-                        newDiv.style.borderRadius = '3px';
-                        
-                        // 当div内容改变时，同步更新到textarea（隐藏的）
-                        newDiv.addEventListener('input', function() {
-                            const textArea = document.getElementById(`text-${index}`);
-                            if (textArea) {
-                                textArea.value = this.textContent;
-                            }
-                        });
-                        
-                        // 设置div的内容
-                        newDiv.innerHTML = highlightedText;
-                        
-                        // 替换textarea
-                        const parent = textArea.parentNode;
-                        parent.replaceChild(newDiv, textArea);
-                        
-                        // 隐藏原始textarea，但不删除，以便保存功能使用
-                        textArea.style.display = 'none';
-                        parent.appendChild(textArea);
+                        // 先检查是否已经存在div元素（可能是之前创建的）
+                        const existingDiv = document.getElementById(`text-div-${index}`);
+                        if (existingDiv) {
+                            // 如果已经存在div元素，直接更新其内容
+                            existingDiv.innerHTML = highlightedText;
+                            existingDiv.style.height = currentHeight;
+                        } else {
+                            // 创建一个替换的div元素
+                            const newDiv = document.createElement('div');
+                            newDiv.id = `text-div-${index}`;
+                            newDiv.className = 'text-input';
+                            newDiv.contentEditable = true;
+                            newDiv.style.width = '100%';
+                            newDiv.style.height = currentHeight;
+                            newDiv.style.resize = 'vertical';
+                            newDiv.style.padding = '5px';
+                            newDiv.style.fontFamily = 'Arial, sans-serif';
+                            newDiv.style.fontSize = '14px';
+                            newDiv.style.border = '1px solid #ddd';
+                            newDiv.style.borderRadius = '3px';
+                            
+                            // 当div内容改变时，同步更新到textarea（隐藏的）
+                            newDiv.addEventListener('input', function() {
+                                const textArea = document.getElementById(`text-${index}`);
+                                if (textArea) {
+                                    textArea.value = this.textContent;
+                                }
+                            });
+                            
+                            // 设置div的内容
+                            newDiv.innerHTML = highlightedText;
+                            
+                            // 替换textarea
+                            const parent = textArea.parentNode;
+                            parent.replaceChild(newDiv, textArea);
+                            
+                            // 隐藏原始textarea，但不删除，以便保存功能使用
+                            textArea.style.display = 'none';
+                            parent.appendChild(textArea);
+                        }
                     }
                 }
             });

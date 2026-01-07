@@ -8,6 +8,8 @@
 # 导入GradioAPI模块
 import sys
 import os
+import tempfile
+import shutil
 
 # 添加当前目录到Python路径，确保能正确导入GradioAPI
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +19,32 @@ from GradioAPI import (
     TTS_API_change_gpt_weights,
     TTS_API_get_tts_wav
 )
+
+
+def get_ref_wav_path():
+    """
+    获取ref.WAV文件的正确路径，支持打包环境和开发环境
+    """
+    # 检查是否在打包环境中
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # 在打包环境中，从临时目录读取
+        meipass_dir = sys._MEIPASS
+        ref_wav_path = os.path.join(meipass_dir, "ref.WAV")
+        if os.path.exists(ref_wav_path):
+            return ref_wav_path
+        
+        # 如果在temp目录中，尝试查找
+        temp_dir = tempfile.gettemp()
+        for root, dirs, files in os.walk(temp_dir):
+            if '_MEI' in root and 'ref.WAV' in files:
+                return os.path.join(root, 'ref.WAV')
+        
+        # 如果找不到，返回临时目录中的路径（由gradio_client处理）
+        return os.path.join(temp_dir, "ref.WAV")
+    else:
+        # 在开发环境中，使用脚本所在目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(current_dir, "ref.WAV")
 
 
 class AudioConverter:
@@ -30,10 +58,10 @@ class AudioConverter:
         :param server_url: Gradio服务器地址
         """
         self.server_url = server_url
-        # 使用相对路径查找ref.WAV文件
-        import os
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.default_ref_wav = os.path.join(current_dir, "ref.WAV")
+        # 获取ref.WAV文件的正确路径
+        self.default_ref_wav = get_ref_wav_path()
+        print(f"ref.WAV路径: {self.default_ref_wav}")
+        print(f"ref.WAV文件是否存在: {os.path.exists(self.default_ref_wav)}")
         # 创建共享的Client对象，避免每次API调用都创建新的连接
         from gradio_client import Client
         self.client = Client(server_url)
