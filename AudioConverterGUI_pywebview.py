@@ -205,6 +205,7 @@ class AudioConverterGUI:
                 <button id="convert-btn" onclick="batch_convert()" style="background-color: #2196F3;">批量转换</button>
                 <button id="export-btn" onclick="export_audio()" style="background-color: #FF9800; margin-left: 10px;">导出</button>
                 <button id="batch-subtitle-btn" onclick="batch_convert_subtitles()" style="background-color: #9C27B0; margin-left: 10px;">批量转换字幕</button>
+                <button id="optimize-subtitle-btn" onclick="optimize_subtitles()" style="background-color: #FF5722; margin-left: 10px;">优化字幕</button>
             </div>
             
             <!-- 日志输出 -->
@@ -418,6 +419,49 @@ class AudioConverterGUI:
                     }
                 } else {
                     add_log('❌ 批量转换字幕失败: ' + result.error);
+                }
+            });
+        }
+        
+        // 优化字幕
+        function optimize_subtitles() {
+            if (!document.getElementById('file-path').value) {
+                add_log('⚠️ 请先导入JSON文件');
+                return;
+            }
+            
+            // 禁用按钮
+            const btn = document.getElementById('optimize-subtitle-btn');
+            btn.disabled = true;
+            btn.textContent = '优化中...';
+            
+            // 开始优化字幕
+            window.pywebview.api.optimize_subtitles().then(function(result) {
+                // 启用按钮
+                btn.disabled = false;
+                btn.textContent = '优化字幕';
+                
+                if (result.success) {
+                    add_log('🎉 优化字幕完成！');
+                    add_log(`📊 成功: ${result.success_count}, 失败: ${result.error_count}`);
+                    
+                    // 重新导入JSON文件以更新信息
+                    const filePath = document.getElementById('file-path').value;
+                    if (filePath) {
+                        add_log('🔄 重新导入JSON文件以更新字幕信息');
+                        // 调用Python的重新导入方法
+                        window.pywebview.api.reimport_json_file().then(function(reimportResult) {
+                            if (reimportResult.success) {
+                                add_log('✅ JSON文件重新导入成功，信息已更新');
+                                // 更新表格显示
+                                update_table(reimportResult.tasks);
+                            } else {
+                                add_log('❌ JSON文件重新导入失败: ' + reimportResult.error);
+                            }
+                        });
+                    }
+                } else {
+                    add_log('❌ 优化字幕失败: ' + result.error);
                 }
             });
         }
@@ -693,7 +737,8 @@ class AudioConverterGUI:
             self.pass_subtitle,
             self.revert_subtitle,
             self.batch_convert_subtitles,
-            self.reimport_json_file
+            self.reimport_json_file,
+            self.optimize_subtitles
         )
         
         # 启动GUI
@@ -795,28 +840,70 @@ class AudioConverterGUI:
                 if not isinstance(item["text"], str):
                     return {"success": False, "error": "JSON文件无效：text字段必须是字符串"}
             
+            # 检查是否是第一次导入或结构不同
+            is_first_import = not self.json_file_path
+            is_structure_same = False
+            is_text_same = False
+            
+            if not is_first_import:
+                # 检查分镜结构是否相同
+                if len(json_data) == len(self.tasks):
+                    is_structure_same = True
+                    # 检查text字段是否相同
+                    is_text_same = True
+                    for i, item in enumerate(json_data):
+                        if i >= len(self.tasks):
+                            is_text_same = False
+                            break
+                        if item["text"] != self.tasks[i]["text"]:
+                            is_text_same = False
+                            break
+            
             # 保存文件路径
             self.json_file_path = file_path
             
             # 生成任务列表
-            self.tasks = []
+            new_tasks = []
             for i, item in enumerate(json_data):
                 # 从JSON文件中读取音频路径
                 original_audio_path = item.get("audio", item.get("audio_path", None))
+                # 从JSON文件中读取字幕路径
+                new_srt_path = item.get("SRT_Path", item.get("srt_path", None))
                 
-                task = {
-                    "id": i,
-                    "text": item["text"],
-                    "duration": 0,
-                    "status": "未通过",
-                    "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
-                    "original_audio_path": original_audio_path,  # 保存原始音频路径
-                    "chapter": item.get("chapter", item.get("Chapter", "")),
-                    "description": item.get("description", item.get("Description", "")),
-                    "subtitles": [],  # 字幕列表
-                    "srt_path": item.get("SRT_Path", item.get("srt_path", None))  # 字幕文件路径
-                }
-                self.tasks.append(task)
+                # 检查是否需要保留状态
+                if not is_first_import and is_structure_same and is_text_same and i < len(self.tasks):
+                    # 保留原有状态
+                    old_task = self.tasks[i]
+                    task = {
+                        "id": i,
+                        "text": item["text"],
+                        "duration": 0,  # 重置时长，因为可能是新的音频文件
+                        "status": old_task["status"],  # 保留原有状态
+                        "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
+                        "original_audio_path": original_audio_path,  # 保存原始音频路径
+                        "chapter": item.get("chapter", item.get("Chapter", "")),
+                        "description": item.get("description", item.get("Description", "")),
+                        "subtitles": old_task.get("subtitles", []),  # 保留原有字幕状态
+                        "srt_path": new_srt_path  # 使用新导入的字幕文件路径
+                    }
+                else:
+                    # 重置状态
+                    task = {
+                        "id": i,
+                        "text": item["text"],
+                        "duration": 0,
+                        "status": "未通过",
+                        "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
+                        "original_audio_path": original_audio_path,  # 保存原始音频路径
+                        "chapter": item.get("chapter", item.get("Chapter", "")),
+                        "description": item.get("description", item.get("Description", "")),
+                        "subtitles": [],  # 字幕列表
+                        "srt_path": new_srt_path  # 字幕文件路径
+                    }
+                new_tasks.append(task)
+            
+            # 更新任务列表
+            self.tasks = new_tasks
             
             # 将所有对象的text字段抽取出来保存为同名的.txt文件
             txt_file_path = os.path.splitext(file_path)[0] + '.txt'
@@ -936,6 +1023,82 @@ class AudioConverterGUI:
         except Exception as e:
             print(f"批量转换字幕异常: {str(e)}")
             return {"success": False, "error": f"批量转换字幕失败: {str(e)}"}
+    
+    def optimize_subtitles(self, *args):
+        """
+        优化字幕
+        """
+        try:
+            if not self.json_file_path:
+                return {"success": False, "error": "未导入JSON文件"}
+            
+            if not self.tasks:
+                return {"success": False, "error": "没有任务需要优化"}
+            
+            # 导入ImproveSrtResultsLLM
+            try:
+                from ImproveSrtResultsLLM import improve_srt
+            except ImportError:
+                return {"success": False, "error": "ImproveSrtResultsLLM模块导入失败"}
+            
+            success_count = 0
+            error_count = 0
+            total_tasks = len(self.tasks)
+            
+            # 遍历每一个分镜
+            for i, task in enumerate(self.tasks):
+                try:
+                    # 检查字幕状态是否有未通过的
+                    subtitles = task.get("subtitles", [])
+                    has_failed_subtitles = any(sub.get("status", "") == "未通过" for sub in subtitles)
+                    
+                    # 检查是否有SRT文件路径
+                    srt_path = task.get("srt_path", None)
+                    if not srt_path or not os.path.exists(srt_path):
+                        print(f"分镜 {i+1}: 没有找到SRT文件，跳过")
+                        error_count += 1
+                        continue
+                    
+                    # 如果有未通过的字幕，进行优化
+                    if has_failed_subtitles:
+                        print(f"开始优化分镜 {i+1}/{total_tasks}")
+                        
+                        # 读取SRT文件内容
+                        with open(srt_path, 'r', encoding='utf-8') as f:
+                            srt_content = f.read()
+                        
+                        # 获取原始文稿（text字段）
+                        original_script = task.get("text", "")
+                        if not original_script:
+                            print(f"分镜 {i+1}: 没有找到原始文稿，跳过")
+                            error_count += 1
+                            continue
+                        
+                        # 调用ImproveSrtResultsLLM进行优化
+                        optimized_content = improve_srt(original_script, srt_content)
+                        
+                        # 将优化后的内容写回SRT文件
+                        with open(srt_path, 'w', encoding='utf-8') as f:
+                            f.write(optimized_content)
+                        
+                        print(f"分镜 {i+1}: 字幕优化成功")
+                        success_count += 1
+                    else:
+                        print(f"分镜 {i+1}: 所有字幕都已通过，跳过")
+                        
+                except Exception as e:
+                    print(f"分镜 {i+1}: 优化失败 - {str(e)}")
+                    error_count += 1
+            
+            return {
+                "success": True,
+                "success_count": success_count,
+                "error_count": error_count
+            }
+            
+        except Exception as e:
+            print(f"优化字幕异常: {str(e)}")
+            return {"success": False, "error": f"优化字幕失败: {str(e)}"}
     
     def reimport_json_file(self, *args):
         """
