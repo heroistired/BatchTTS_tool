@@ -25,6 +25,7 @@ class AudioConverterGUI:
         """
         self.server_url = ""
         self.json_file_path = ""
+        self.output_folder = None
         self.tasks = []
         self.is_processing = False
         self.window = None
@@ -177,6 +178,13 @@ class AudioConverterGUI:
                 <input type="text" id="server-url" placeholder="http://192.168.31.194:9872/">
                 <button onclick="set_server_url()">设定服务器地址</button>
             </div>
+            
+            <!-- 输出文件夹 -->
+            <div class="form-row">
+                <label for="output-folder">输出文件夹：</label>
+                <input type="text" id="output-folder" readonly placeholder="请选择输出文件夹">
+                <button onclick="select_output_folder()">设置输出文件夹</button>
+            </div>
         </div>
         
         <!-- 操作区 -->
@@ -309,6 +317,18 @@ class AudioConverterGUI:
             });
         }
         
+        // 选择输出文件夹
+        function select_output_folder() {
+            window.pywebview.api.select_output_folder().then(function(result) {
+                if (result.success) {
+                    document.getElementById('output-folder').value = result.folder_path;
+                    add_log('✅ 输出文件夹设置成功');
+                } else {
+                    add_log('❌ 文件夹选择失败: ' + result.error);
+                }
+            });
+        }
+        
         // 批量转换
         function batch_convert() {
             const serverUrl = document.getElementById('server-url').value;
@@ -423,6 +443,7 @@ class AudioConverterGUI:
         self.window.expose(
             self.select_file,
             self.set_server_url,
+            self.select_output_folder,
             self.batch_convert,
             self.play_audio,
             self.pass_task,
@@ -432,6 +453,59 @@ class AudioConverterGUI:
         
         # 启动GUI
         webview.start()
+    
+    def select_output_folder(self):
+        """
+        选择输出文件夹
+        """
+        try:
+            # 打开文件夹选择对话框
+            # 使用与select_file方法相同的枚举常量
+            folder_path = self.window.create_file_dialog(
+                webview.FileDialog.FOLDER,
+                allow_multiple=False
+            )
+            
+            # 检查是否取消选择
+            if folder_path is None:
+                return {"success": False, "error": "未选择文件夹"}
+            
+            # 确保folder_path是字符串类型
+            if isinstance(folder_path, tuple) or isinstance(folder_path, list):
+                if len(folder_path) > 0:
+                    folder_path = folder_path[0]
+                else:
+                    return {"success": False, "error": "未选择文件夹"}
+            
+            if not isinstance(folder_path, str):
+                return {"success": False, "error": f"无效的文件夹路径类型: {type(folder_path)}"}
+            
+            if not folder_path:
+                return {"success": False, "error": "未选择文件夹"}
+            
+            # 验证文件夹是否存在
+            if not os.path.exists(folder_path):
+                # 如果文件夹不存在，创建它
+                try:
+                    os.makedirs(folder_path, exist_ok=True)
+                except Exception as e:
+                    return {"success": False, "error": f"创建文件夹失败: {str(e)}"}
+            
+            if not os.path.isdir(folder_path):
+                return {"success": False, "error": "选择的路径不是文件夹"}
+            
+            # 保存输出文件夹路径
+            self.output_folder = folder_path
+            
+            return {
+                "success": True,
+                "folder_path": folder_path
+            }
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            return {"success": False, "error": f"文件夹选择失败: {str(e)}\n详细错误: {error_detail}"}
     
     def select_file(self):
         """
@@ -482,12 +556,16 @@ class AudioConverterGUI:
             # 生成任务列表
             self.tasks = []
             for i, item in enumerate(json_data):
+                # 从JSON文件中读取音频路径
+                original_audio_path = item.get("audio", item.get("audio_path", None))
+                
                 task = {
                     "id": i,
                     "text": item["text"],
                     "duration": 0,
                     "status": "未通过",
-                    "audio_path": None,
+                    "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
+                    "original_audio_path": original_audio_path,  # 保存原始音频路径
                     "chapter": item.get("Chapter", ""),
                     "description": item.get("Description", "")
                 }
@@ -577,6 +655,20 @@ class AudioConverterGUI:
                         # 转换成功
                         success_count += 1
                         audio_path = result.get("local_audio_path")
+                        
+                        # 如果设置了输出文件夹，将音频文件移动到该文件夹
+                        if self.output_folder:
+                            import shutil
+                            import os
+                            # 获取文件名
+                            audio_filename = os.path.basename(audio_path)
+                            # 生成新的保存路径
+                            new_audio_path = os.path.join(self.output_folder, audio_filename)
+                            # 移动文件
+                            shutil.move(audio_path, new_audio_path)
+                            # 更新audio_path为新路径
+                            audio_path = new_audio_path
+                        
                         task_results.append({"success": True, "audio_path": audio_path, "index": original_index})
                         
                         # 更新audio_path和duration
@@ -639,11 +731,19 @@ class AudioConverterGUI:
             
             task = self.tasks[index]
             
-            if not task["audio_path"]:
-                return {"success": False, "error": "没有音频文件"}
+            # 优先使用转换后的音频路径
+            audio_to_play = task["audio_path"]
+            
+            # 检查音频文件是否存在
+            if not audio_to_play or not os.path.exists(audio_to_play):
+                # 如果转换后的音频不存在，尝试使用原始音频路径
+                if task.get("original_audio_path") and os.path.exists(task["original_audio_path"]):
+                    audio_to_play = task["original_audio_path"]
+                else:
+                    return {"success": False, "error": "没有可用的音频文件"}
             
             # 使用系统默认播放器播放音频
-            subprocess.Popen([task["audio_path"]], shell=True)
+            subprocess.Popen([audio_to_play], shell=True)
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -741,8 +841,13 @@ class AudioConverterGUI:
                 if not task["audio_path"] or not os.path.exists(task["audio_path"]):
                     return {"success": False, "error": f"任务 {task['id']} 缺少音频文件"}
             
-            # 拼接音频文件
-            export_audio_path = "ExportAudio.wav"
+            # 确定导出文件保存路径
+            if self.output_folder:
+                export_audio_path = os.path.join(self.output_folder, "ExportAudio.wav")
+                export_info_path = os.path.join(self.output_folder, "ExportAudioInfo.json")
+            else:
+                export_audio_path = "ExportAudio.wav"
+                export_info_path = "ExportAudioInfo.json"
             
             # 读取第一个音频文件的参数
             first_audio = self.tasks[0]["audio_path"]
@@ -775,16 +880,16 @@ class AudioConverterGUI:
             # 生成导出信息JSON
             export_info = []
             for task in self.tasks:
-                audio_filename = os.path.basename(task["audio_path"])
+                # 使用绝对路径作为audio字段
+                absolute_audio_path = os.path.abspath(task["audio_path"])
                 export_info.append({
                     "text": task["text"],
-                    "audio": audio_filename,
+                    "audio": absolute_audio_path,
                     "duration": task["duration"],
                     "chapter": task["chapter"],
                     "description": task["description"]
                 })
             
-            export_info_path = "ExportAudioInfo.json"
             with open(export_info_path, 'w', encoding='utf-8') as f:
                 json.dump(export_info, f, ensure_ascii=False, indent=2)
             
