@@ -25,7 +25,11 @@ class AudioConverterGUI:
         """
         self.audio_server_url = ""
         self.subtitle_server_url = ""
+        self.video_server_url = ""
         self.json_file_path = ""
+        self.summary_file_path = ""
+        self.autodl_token = ""
+        self.instance_id = ""
         self.output_folder = None
         self.tasks = []
         self.is_processing = False
@@ -187,11 +191,39 @@ class AudioConverterGUI:
                 <button onclick="set_subtitle_server_url()">设定字幕服务器地址</button>
             </div>
             
+            <!-- 视频服务器地址 -->
+            <div class="form-row">
+                <label for="video-server-url">视频服务器地址：</label>
+                <input type="text" id="video-server-url" placeholder="http://192.168.31.194:9873/">
+                <button onclick="set_video_server_url()">设定视频服务器地址</button>
+            </div>
+            
             <!-- 输出文件夹 -->
             <div class="form-row">
                 <label for="output-folder">输出文件夹：</label>
                 <input type="text" id="output-folder" readonly placeholder="请选择输出文件夹">
                 <button onclick="select_output_folder()">设置输出文件夹</button>
+            </div>
+            
+            <!-- 视频梗概文件导入 -->
+            <div class="form-row">
+                <label for="summary-file-path">视频梗概文件路径：</label>
+                <input type="text" id="summary-file-path" readonly placeholder="请选择视频梗概文件">
+                <button onclick="select_summary_file()">导入视频梗概文件</button>
+            </div>
+            
+            <!-- AutoDL网站token -->
+            <div class="form-row">
+                <label for="autodl-token">AutoDL网站token：</label>
+                <input type="text" id="autodl-token" placeholder="请输入AutoDL网站token">
+                <button onclick="set_autodl_token()">设定AutoDL网站token</button>
+            </div>
+            
+            <!-- 实例id -->
+            <div class="form-row">
+                <label for="instance-id">实例id：</label>
+                <input type="text" id="instance-id" placeholder="请输入实例id">
+                <button onclick="set_instance_id()">设定实例id</button>
             </div>
         </div>
         
@@ -222,6 +254,7 @@ class AudioConverterGUI:
                         <th class="button-column">通过</th>
                         <th class="button-column">撤回</th>
                         <th class="button-column">字幕</th>
+                        <th class="button-column">视频</th>
                     </tr>
                     <!-- 动态添加行 -->
                 </table>
@@ -297,7 +330,9 @@ class AudioConverterGUI:
                 // 状态列
                 const statusCell = row.insertCell();
                 statusCell.className = 'status-column';
-                statusCell.innerHTML = `<span class="status-failed" id="status-${index}">未通过</span>`;
+                const statusClass = task.status === '已通过' ? 'status-passed' : 'status-failed';
+                const statusText = task.status === '已通过' ? '已通过' : '未通过';
+                statusCell.innerHTML = `<span class="${statusClass}" id="status-${index}">${statusText}</span>`;
                 
                 // 播放按钮
                 const playCell = row.insertCell();
@@ -315,16 +350,21 @@ class AudioConverterGUI:
                 revertCell.innerHTML = `<button class="button-small" onclick="revert_task(${index})">撤回</button>`;
                 
                 // 字幕按钮
-                const subtitleCell = row.insertCell();
-                subtitleCell.className = 'button-column';
-                subtitleCell.innerHTML = `<button class="button-small" onclick="toggle_subtitles(${index})">展开</button>`;
+                    const subtitleCell = row.insertCell();
+                    subtitleCell.className = 'button-column';
+                    subtitleCell.innerHTML = `<button class="button-small" onclick="toggle_subtitles(${index})">展开</button>`;
+                    
+                    // 视频按钮
+                    const videoCell = row.insertCell();
+                    videoCell.className = 'button-column';
+                    videoCell.innerHTML = `<button class="button-small" onclick="toggle_videos(${index})">展开</button>`;
                 
-            // 添加二级子表格容器行
+            // 添加二级子表格容器行（字幕）
             const subTableRow = table.insertRow();
             subTableRow.id = `subtitle-row-${index}`;
             subTableRow.style.display = 'none';
             const subTableCell = subTableRow.insertCell();
-            subTableCell.colSpan = 7;  // 跨越所有列
+            subTableCell.colSpan = 8;  // 跨越所有列
             subTableCell.id = `subtitle-container-${index}`;
             subTableCell.innerHTML = `
                 <div style="padding: 10px; background-color: #f9f9f9; border-top: 1px solid #ddd; margin: 0 -10px;">
@@ -337,6 +377,28 @@ class AudioConverterGUI:
                         </tr>
                         <tr>
                             <td colspan="4" style="padding: 10px; text-align: center; color: #666;">加载字幕中...</td>
+                        </tr>
+                    </table>
+                </div>
+            `;
+            
+            // 添加二级子表格容器行（视频）
+            const videoSubTableRow = table.insertRow();
+            videoSubTableRow.id = `video-row-${index}`;
+            videoSubTableRow.style.display = 'none';
+            const videoSubTableCell = videoSubTableRow.insertCell();
+            videoSubTableCell.colSpan = 8;  // 跨越所有列
+            videoSubTableCell.id = `video-container-${index}`;
+            videoSubTableCell.innerHTML = `
+                <div style="padding: 10px; background-color: #f9f9f9; border-top: 1px solid #ddd; margin: 0 -10px;">
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+                        <tr>
+                            <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: auto;">提示词</th>
+                            <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 100px;">图片</th>
+                            <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 100px;">视频</th>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding: 10px; text-align: center; color: #666;">加载视频信息中...</td>
                         </tr>
                     </table>
                 </div>
@@ -364,6 +426,54 @@ class AudioConverterGUI:
                     add_log('✅ 字幕服务器地址设置成功');
                 } else {
                     add_log('❌ 字幕服务器地址无效');
+                }
+            });
+        }
+        
+        // 设置视频服务器地址
+        function set_video_server_url() {
+            const serverUrl = document.getElementById('video-server-url').value;
+            window.pywebview.api.set_video_server_url(serverUrl).then(function(result) {
+                if (result.success) {
+                    add_log('✅ 视频服务器地址设置成功');
+                } else {
+                    add_log('❌ 视频服务器地址无效');
+                }
+            });
+        }
+        
+        // 选择视频梗概文件
+        function select_summary_file() {
+            window.pywebview.api.select_summary_file().then(function(result) {
+                if (result.success) {
+                    document.getElementById('summary-file-path').value = result.file_path;
+                    add_log('✅ 成功导入视频梗概文件');
+                } else {
+                    add_log('❌ 文件导入失败: ' + result.error);
+                }
+            });
+        }
+        
+        // 设置AutoDL网站token
+        function set_autodl_token() {
+            const token = document.getElementById('autodl-token').value;
+            window.pywebview.api.set_autodl_token(token).then(function(result) {
+                if (result.success) {
+                    add_log('✅ AutoDL网站token设置成功');
+                } else {
+                    add_log('❌ AutoDL网站token无效');
+                }
+            });
+        }
+        
+        // 设置实例id
+        function set_instance_id() {
+            const instanceId = document.getElementById('instance-id').value;
+            window.pywebview.api.set_instance_id(instanceId).then(function(result) {
+                if (result.success) {
+                    add_log('✅ 实例id设置成功');
+                } else {
+                    add_log('❌ 实例id无效');
                 }
             });
         }
@@ -611,6 +721,170 @@ class AudioConverterGUI:
             }
         }
         
+        // 切换视频展开/折叠
+        function toggle_videos(index) {
+            const row = document.getElementById(`video-row-${index}`);
+            const button = event.target;
+            
+            if (row.style.display === 'none') {
+                // 展开
+                row.style.display = '';
+                button.textContent = '收起';
+                // 加载视频信息
+                load_videos(index);
+            } else {
+                // 折叠
+                row.style.display = 'none';
+                button.textContent = '展开';
+            }
+        }
+        
+        // 加载视频信息
+        function load_videos(index) {
+            window.pywebview.api.get_videos(index).then(function(result) {
+                const container = document.getElementById(`video-container-${index}`);
+                if (result.success) {
+                    const task = result.task;
+                    const promptUpdateFlag = task.Prompt_Update_Flag !== undefined ? task.Prompt_Update_Flag : 1;
+                    const statusClass = promptUpdateFlag === 0 ? 'status-passed' : 'status-failed';
+                    const statusText = promptUpdateFlag === 0 ? '已通过' : '未通过';
+                    
+                    let html = `
+                        <div style="padding: 10px; background-color: #f9f9f9; border-top: 1px solid #ddd; margin: 0 -10px;">
+                            <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+                                <tr>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: auto;">提示词</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 400px;">图片</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 100px;">视频</th>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <button class="button-small" onclick="view_prompt(${index})">查看提示词</button>
+                                            <button class="button-small ${statusClass}" onclick="toggle_prompt_status(${index})">${statusText}</button>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div style="width: 320px; height: 320px; border: 1px solid #ddd; border-radius: 3px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0;">
+                                                ${task.Figure && task.Figure.filepath ? `<div id="image-container-${index}"><span style="color: #666;">加载图片中...</span></div>` : '<span style="color: #666;">无图片</span>'}
+                                            </div>
+                                            <div>
+                                                ${task.Figure_Update_Flag !== undefined ? `
+                                                    <button class="button-small ${task.Figure_Update_Flag === 0 ? 'status-passed' : 'status-failed'}" onclick="toggle_figure_status(${index})")">${task.Figure_Update_Flag === 0 ? '已通过' : '未通过'}</button>
+                                                ` : '<button class="button-small status-failed" onclick="toggle_figure_status(${index})")">未通过</button>'}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center; color: #666;">空置</td>
+                                </tr>
+                            </table>
+                        </div>
+                    `;
+                    
+                    container.innerHTML = html;
+                    
+                    // 加载图片
+                    if (task.Figure && task.Figure.filepath) {
+                        load_image(index, task.Figure.filepath);
+                    }
+                } else {
+                    container.innerHTML = `
+                        <div style="padding: 10px; background-color: #f9f9f9; border-top: 1px solid #ddd;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2;">提示词</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2;">图片</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2;">视频</th>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" style="padding: 10px; text-align: center; color: #666;">${result.error}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    `;
+                }
+            });
+        }
+        
+        // 加载图片
+        function load_image(index, filepath) {
+            window.pywebview.api.get_image_base64(filepath).then(function(result) {
+                if (result.success) {
+                    const imageContainer = document.getElementById(`image-container-${index}`);
+                    if (imageContainer) {
+                        imageContainer.innerHTML = `<img src="data:image/png;base64,${result.base64}" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+                    }
+                } else {
+                    const imageContainer = document.getElementById(`image-container-${index}`);
+                    if (imageContainer) {
+                        imageContainer.innerHTML = `<span style="color: #666;">图片加载失败</span>`;
+                    }
+                    add_log('❌ 图片加载失败: ' + result.error);
+                }
+            });
+        }
+        
+        // 查看提示词
+        function view_prompt(index) {
+            window.pywebview.api.get_prompt_details(index).then(function(result) {
+                if (result.success) {
+                    const details = result.details;
+                    
+                    // 创建模态对话框
+                    let modalHtml = `
+                        <div id="prompt-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1000; display: flex; justify-content: center; align-items: center;">
+                            <div style="background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 0, 0, 0.3); max-width: 95%; width: 1600px; max-height: 90%; overflow-y: auto;">
+                                <h3>提示词详情</h3>
+                                <div style="margin: 10px 0;">
+                                    <h4>章节名</h4>
+                                    <textarea readonly style="width: 100%; min-height: 50px; padding: 10px; border: 1px solid #ddd; border-radius: 3px;">${details.chapter || '不存在信息'}</textarea>
+                                </div>
+                                <div style="margin: 10px 0;">
+                                    <h4>分镜描述</h4>
+                                    <textarea readonly style="width: 100%; min-height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 3px;">${details.description || '不存在信息'}</textarea>
+                                </div>
+                                <div style="margin: 10px 0;">
+                                    <h4>首帧提示词</h4>
+                                    <textarea readonly style="width: 100%; min-height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 3px;">${details.prompt_figure || '不存在信息'}</textarea>
+                                </div>
+                                <div style="margin: 10px 0;">
+                                    <h4>视频提示词</h4>
+                                    <textarea readonly style="width: 100%; min-height: 150px; padding: 10px; border: 1px solid #ddd; border-radius: 3px;">${typeof details.prompt_video === 'object' && details.prompt_video !== null && details.prompt_video.Process ? JSON.stringify(details.prompt_video.Process, null, 2) : (details.prompt_video || '不存在信息')}</textarea>
+                                </div>
+                                <div style="margin-top: 20px; text-align: right;">
+                                    <button onclick="document.getElementById('prompt-modal').remove()">关闭</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 将模态对话框添加到页面
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                }
+            });
+        }
+        
+        // 切换提示词状态
+        function toggle_prompt_status(index) {
+            window.pywebview.api.toggle_prompt_status(index).then(function(result) {
+                if (result.success) {
+                    // 重新加载视频信息以更新状态
+                    load_videos(index);
+                }
+            });
+        }
+        
+        // 切换图片状态
+        function toggle_figure_status(index) {
+            window.pywebview.api.toggle_figure_status(index).then(function(result) {
+                if (result.success) {
+                    // 重新加载视频信息以更新状态
+                    load_videos(index);
+                }
+            });
+        }
+        
         // 加载字幕
         function load_subtitles(index) {
             window.pywebview.api.get_subtitles(index).then(function(result) {
@@ -727,13 +1001,22 @@ class AudioConverterGUI:
             self.select_file,
             self.set_audio_server_url,
             self.set_subtitle_server_url,
+            self.set_video_server_url,
             self.select_output_folder,
+            self.select_summary_file,
+            self.set_autodl_token,
+            self.set_instance_id,
             self.batch_convert,
             self.play_audio,
             self.pass_task,
             self.revert_task,
             self.export_audio,
             self.get_subtitles,
+            self.get_videos,
+            self.get_prompt_details,
+            self.toggle_prompt_status,
+            self.toggle_figure_status,
+            self.get_image_base64,
             self.pass_subtitle,
             self.revert_subtitle,
             self.batch_convert_subtitles,
@@ -884,7 +1167,12 @@ class AudioConverterGUI:
                         "chapter": item.get("chapter", item.get("Chapter", "")),
                         "description": item.get("description", item.get("Description", "")),
                         "subtitles": old_task.get("subtitles", []),  # 保留原有字幕状态
-                        "srt_path": new_srt_path  # 使用新导入的字幕文件路径
+                        "srt_path": new_srt_path,  # 使用新导入的字幕文件路径
+                        "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
+                        "Prompt_Figure": item.get("Prompt_Figure", None),
+                        "Prompt_Video": item.get("Prompt_Video", None),
+                        "Figure": item.get("Figure", None),
+                        "Figure_Update_Flag": item.get("Figure_Update_Flag", 1)
                     }
                 else:
                     # 重置状态
@@ -898,7 +1186,12 @@ class AudioConverterGUI:
                         "chapter": item.get("chapter", item.get("Chapter", "")),
                         "description": item.get("description", item.get("Description", "")),
                         "subtitles": [],  # 字幕列表
-                        "srt_path": new_srt_path  # 字幕文件路径
+                        "srt_path": new_srt_path,  # 使用新导入的字幕文件路径
+                        "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
+                        "Prompt_Figure": item.get("Prompt_Figure", None),
+                        "Prompt_Video": item.get("Prompt_Video", None),
+                        "Figure": item.get("Figure", None),
+                        "Figure_Update_Flag": item.get("Figure_Update_Flag", 1)
                     }
                 new_tasks.append(task)
             
@@ -977,6 +1270,127 @@ class AudioConverterGUI:
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": f"设置服务器地址失败: {str(e)}"}
+    
+    def set_video_server_url(self, *args):
+        """
+        设置视频服务器地址
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                server_url = args[0][0]
+            elif len(args) == 1:
+                server_url = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(server_url, str):
+                return {"success": False, "error": f"无效的服务器地址类型: {type(server_url)}"}
+            
+            if not server_url:
+                return {"success": False, "error": "服务器地址不能为空"}
+            
+            if not re.match(r'^http://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+/$', server_url):
+                return {"success": False, "error": "无效的服务器地址格式"}
+            
+            self.video_server_url = server_url
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": f"设置服务器地址失败: {str(e)}"}
+    
+    def select_summary_file(self, *args):
+        """
+        选择视频梗概文件
+        """
+        try:
+            # 打开文件对话框
+            file_path = self.window.create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=False
+            )
+            
+            # 检查是否取消选择
+            if file_path is None:
+                return {"success": False, "error": "未选择文件"}
+            
+            # 确保file_path是字符串类型
+            if isinstance(file_path, tuple) or isinstance(file_path, list):
+                if len(file_path) > 0:
+                    file_path = file_path[0]
+                else:
+                    return {"success": False, "error": "未选择文件"}
+            
+            if not isinstance(file_path, str):
+                return {"success": False, "error": f"无效的文件路径类型: {type(file_path)}"}
+            
+            if not file_path:
+                return {"success": False, "error": "未选择文件"}
+            
+            # 检查文件扩展名
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in [".txt", ".md"]:
+                return {"success": False, "error": "只支持.txt和.md格式的文件"}
+            
+            # 保存文件路径
+            self.summary_file_path = file_path
+            
+            return {
+                "success": True,
+                "file_path": file_path
+            }
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            return {"success": False, "error": f"文件导入失败: {str(e)}\n详细错误: {error_detail}"}
+    
+    def set_autodl_token(self, *args):
+        """
+        设置AutoDL网站token
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                token = args[0][0]
+            elif len(args) == 1:
+                token = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(token, str):
+                return {"success": False, "error": f"无效的token类型: {type(token)}"}
+            
+            if not token:
+                return {"success": False, "error": "token不能为空"}
+            
+            self.autodl_token = token
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": f"设置token失败: {str(e)}"}
+    
+    def set_instance_id(self, *args):
+        """
+        设置实例id
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                instance_id = args[0][0]
+            elif len(args) == 1:
+                instance_id = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(instance_id, str):
+                return {"success": False, "error": f"无效的实例id类型: {type(instance_id)}"}
+            
+            if not instance_id:
+                return {"success": False, "error": "实例id不能为空"}
+            
+            self.instance_id = instance_id
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": f"设置实例id失败: {str(e)}"}
     
     def batch_convert_subtitles(self, *args):
         """
@@ -1158,7 +1572,12 @@ class AudioConverterGUI:
                     "chapter": item.get("chapter", item.get("Chapter", "")),
                     "description": item.get("description", item.get("Description", "")),
                     "subtitles": [],  # 字幕列表
-                    "srt_path": item.get("SRT_Path", item.get("srt_path", None))  # 字幕文件路径
+                    "srt_path": item.get("SRT_Path", item.get("srt_path", None)),  # 字幕文件路径
+                    "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
+                    "Prompt_Figure": item.get("Prompt_Figure", None),
+                    "Prompt_Video": item.get("Prompt_Video", None),
+                    "Figure": item.get("Figure", None),
+                    "Figure_Update_Flag": item.get("Figure_Update_Flag", 1)
                 }
                 self.tasks.append(task)
             
@@ -1505,6 +1924,173 @@ class AudioConverterGUI:
         except Exception as e:
             print(f"调试: 获取字幕异常: {str(e)}")
             return {"success": False, "error": f"获取字幕失败: {str(e)}"}
+    
+    def get_videos(self, *args):
+        """
+        获取视频信息
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                index = args[0][0]
+            elif len(args) == 1:
+                index = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(index, int):
+                index = int(index)
+            
+            if index < 0 or index >= len(self.tasks):
+                return {"success": False, "error": "无效的任务索引"}
+            
+            task = self.tasks[index]
+            return {
+                "success": True,
+                "task": task
+            }
+        except Exception as e:
+            print(f"调试: 获取视频信息异常: {str(e)}")
+            return {"success": False, "error": f"获取视频信息失败: {str(e)}"}
+    
+    def get_prompt_details(self, *args):
+        """
+        获取提示词详情
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                index = args[0][0]
+            elif len(args) == 1:
+                index = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(index, int):
+                index = int(index)
+            
+            if index < 0 or index >= len(self.tasks):
+                return {"success": False, "error": "无效的任务索引"}
+            
+            task = self.tasks[index]
+            details = {
+                "chapter": task.get("chapter", None),
+                "description": task.get("description", None),
+                "prompt_figure": task.get("Prompt_Figure", None),
+                "prompt_video": task.get("Prompt_Video", None)
+            }
+            
+            return {
+                "success": True,
+                "details": details
+            }
+        except Exception as e:
+            print(f"调试: 获取提示词详情异常: {str(e)}")
+            return {"success": False, "error": f"获取提示词详情失败: {str(e)}"}
+    
+    def toggle_prompt_status(self, *args):
+        """
+        切换提示词状态
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                index = args[0][0]
+            elif len(args) == 1:
+                index = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(index, int):
+                index = int(index)
+            
+            if index < 0 or index >= len(self.tasks):
+                return {"success": False, "error": "无效的任务索引"}
+            
+            task = self.tasks[index]
+            current_flag = task.get("Prompt_Update_Flag", 1)
+            # 切换状态
+            new_flag = 0 if current_flag == 1 else 1
+            task["Prompt_Update_Flag"] = new_flag
+            
+            return {
+                "success": True,
+                "new_status": new_flag
+            }
+        except Exception as e:
+            print(f"调试: 切换提示词状态异常: {str(e)}")
+            return {"success": False, "error": f"切换提示词状态失败: {str(e)}"}
+    
+    def toggle_figure_status(self, *args):
+        """
+        切换图片状态
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                index = args[0][0]
+            elif len(args) == 1:
+                index = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(index, int):
+                index = int(index)
+            
+            if index < 0 or index >= len(self.tasks):
+                return {"success": False, "error": "无效的任务索引"}
+            
+            task = self.tasks[index]
+            current_flag = task.get("Figure_Update_Flag", 1)
+            # 切换状态
+            new_flag = 0 if current_flag == 1 else 1
+            task["Figure_Update_Flag"] = new_flag
+            
+            return {
+                "success": True,
+                "new_status": new_flag
+            }
+        except Exception as e:
+            print(f"调试: 切换图片状态异常: {str(e)}")
+            return {"success": False, "error": f"切换图片状态失败: {str(e)}"}
+    
+    def get_image_base64(self, *args):
+        """
+        获取图片的base64编码
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                filepath = args[0][0]
+            elif len(args) == 1:
+                filepath = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(filepath, str):
+                return {"success": False, "error": "无效的文件路径"}
+            
+            # 检查文件是否存在
+            if not os.path.exists(filepath):
+                return {"success": False, "error": f"文件不存在: {filepath}"}
+            
+            # 检查文件是否是图片
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext not in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
+                return {"success": False, "error": f"文件不是图片: {filepath}"}
+            
+            # 读取文件并转换为base64
+            with open(filepath, 'rb') as f:
+                import base64
+                base64_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            return {
+                "success": True,
+                "base64": base64_data
+            }
+        except Exception as e:
+            print(f"调试: 获取图片base64异常: {str(e)}")
+            return {"success": False, "error": f"获取图片base64失败: {str(e)}"}
     
     def pass_subtitle(self, *args):
         """
