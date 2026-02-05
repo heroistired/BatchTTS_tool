@@ -168,7 +168,10 @@ class AudioConverterGUI:
         
         <!-- 配置区 -->
         <div class="section">
-            <div class="section-title">配置区</div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <button onclick="import_config()" style="padding: 5px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">导入配置</button>
+                <div class="section-title">配置区</div>
+            </div>
             
             <!-- 文件导入 -->
             <div class="form-row">
@@ -238,6 +241,8 @@ class AudioConverterGUI:
                 <button id="export-btn" onclick="export_audio()" style="background-color: #FF9800; margin-left: 10px;">导出</button>
                 <button id="batch-subtitle-btn" onclick="batch_convert_subtitles()" style="background-color: #9C27B0; margin-left: 10px;">批量转换字幕</button>
                 <button id="optimize-subtitle-btn" onclick="optimize_subtitles()" style="background-color: #FF5722; margin-left: 10px;">优化字幕</button>
+                <button id="batch-expand-subtitle-btn" onclick="batch_toggle_subtitles()" style="background-color: #607D8B; margin-left: 10px;">批量展开字幕</button>
+                <button id="batch-expand-video-btn" onclick="batch_toggle_videos()" style="background-color: #795548; margin-left: 10px;">批量展开视频</button>
             </div>
             
             <!-- 日志输出 -->
@@ -474,6 +479,33 @@ class AudioConverterGUI:
                     add_log('✅ 实例id设置成功');
                 } else {
                     add_log('❌ 实例id无效');
+                }
+            });
+        }
+        
+        // 导入配置
+        function import_config() {
+            window.pywebview.api.import_config().then(function(result) {
+                if (result.success) {
+                    // 更新各个输入框的值
+                    if (result.config.AudioServer) {
+                        document.getElementById('audio-server-url').value = result.config.AudioServer;
+                    }
+                    if (result.config.SrtServer) {
+                        document.getElementById('subtitle-server-url').value = result.config.SrtServer;
+                    }
+                    if (result.config.VideoServer) {
+                        document.getElementById('video-server-url').value = result.config.VideoServer;
+                    }
+                    if (result.config.AutoDL_Token) {
+                        document.getElementById('autodl-token').value = result.config.AutoDL_Token;
+                    }
+                    if (result.config.AutoDL_ID) {
+                        document.getElementById('instance-id').value = result.config.AutoDL_ID;
+                    }
+                    add_log('✅ 配置导入成功');
+                } else {
+                    add_log('❌ 配置导入失败: ' + result.error);
                 }
             });
         }
@@ -739,6 +771,74 @@ class AudioConverterGUI:
             }
         }
         
+        // 批量切换字幕展开/折叠
+        function batch_toggle_subtitles() {
+            const button = document.getElementById('batch-expand-subtitle-btn');
+            const isExpanded = button.textContent === '批量收起字幕';
+            
+            // 遍历所有字幕行
+            let i = 0;
+            while (true) {
+                const subtitleRow = document.getElementById(`subtitle-row-${i}`);
+                const subtitleButton = document.querySelector(`button[onclick="toggle_subtitles(${i})"]`);
+                
+                if (!subtitleRow || !subtitleButton) {
+                    break;
+                }
+                
+                if (isExpanded) {
+                    // 收起
+                    subtitleRow.style.display = 'none';
+                    subtitleButton.textContent = '展开';
+                } else {
+                    // 展开
+                    subtitleRow.style.display = '';
+                    subtitleButton.textContent = '收起';
+                    // 加载字幕
+                    load_subtitles(i);
+                }
+                
+                i++;
+            }
+            
+            // 切换按钮文字
+            button.textContent = isExpanded ? '批量展开字幕' : '批量收起字幕';
+        }
+        
+        // 批量切换视频展开/折叠
+        function batch_toggle_videos() {
+            const button = document.getElementById('batch-expand-video-btn');
+            const isExpanded = button.textContent === '批量收起视频';
+            
+            // 遍历所有视频行
+            let i = 0;
+            while (true) {
+                const videoRow = document.getElementById(`video-row-${i}`);
+                const videoButton = document.querySelector(`button[onclick="toggle_videos(${i})"]`);
+                
+                if (!videoRow || !videoButton) {
+                    break;
+                }
+                
+                if (isExpanded) {
+                    // 收起
+                    videoRow.style.display = 'none';
+                    videoButton.textContent = '展开';
+                } else {
+                    // 展开
+                    videoRow.style.display = '';
+                    videoButton.textContent = '收起';
+                    // 加载视频信息
+                    load_videos(i);
+                }
+                
+                i++;
+            }
+            
+            // 切换按钮文字
+            button.textContent = isExpanded ? '批量展开视频' : '批量收起视频';
+        }
+        
         // 加载视频信息
         function load_videos(index) {
             window.pywebview.api.get_videos(index).then(function(result) {
@@ -753,21 +853,21 @@ class AudioConverterGUI:
                         <div style="padding: 10px; background-color: #f9f9f9; border-top: 1px solid #ddd; margin: 0 -10px;">
                             <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                                 <tr>
-                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: auto;">提示词</th>
-                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 400px;">图片</th>
-                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 100px;">视频</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 10%;">提示词</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 45%;">图片</th>
+                                    <th style="padding: 5px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f2f2f2; width: 45%;">视频</th>
                                 </tr>
                                 <tr>
                                     <td style="padding: 10px; border-bottom: 1px solid #eee;">
-                                        <div style="display: flex; align-items: center; gap: 10px;">
-                                            <button class="button-small" onclick="view_prompt(${index})">查看提示词</button>
-                                            <button class="button-small ${statusClass}" onclick="toggle_prompt_status(${index})">${statusText}</button>
+                                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                                            <button class="button-small" onclick="view_prompt(${index})")>查看提示词</button>
+                                            <button class="button-small ${statusClass}" onclick="toggle_prompt_status(${index})")>${statusText}</button>
                                         </div>
                                     </td>
                                     <td style="padding: 10px; border-bottom: 1px solid #eee;">
                                         <div style="display: flex; align-items: center; gap: 10px;">
-                                            <div style="width: 320px; height: 320px; border: 1px solid #ddd; border-radius: 3px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0;">
-                                                ${task.Figure && task.Figure.filepath ? `<div id="image-container-${index}"><span style="color: #666;">加载图片中...</span></div>` : '<span style="color: #666;">无图片</span>'}
+                                            <div style="max-width: 320px; max-height: 320px; border: 1px solid #ddd; border-radius: 3px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0;">
+                                                ${task.Figure && task.Figure.filepath ? `<div id="image-container-${index}" style="display: flex; align-items: center; justify-content: center;"><span style="color: #666;">加载图片中...</span></div>` : '<span style="color: #666;">无图片</span>'}
                                             </div>
                                             <div>
                                                 ${task.Figure_Update_Flag !== undefined ? `
@@ -776,7 +876,18 @@ class AudioConverterGUI:
                                             </div>
                                         </div>
                                     </td>
-                                    <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center; color: #666;">空置</td>
+                                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <div style="max-width: 320px; max-height: 320px; border: 1px solid #ddd; border-radius: 3px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0;">
+                                                ${task.Video && task.Video.filepath ? `<div id="video-display-${index}"><span style="color: #666;">加载视频中...</span></div>` : '<span style="color: #666;">无视频</span>'}
+                                            </div>
+                                            <div>
+                                                ${task.Video_Update_Flag !== undefined ? `
+                                                    <button class="button-small ${task.Video_Update_Flag === 0 ? 'status-passed' : 'status-failed'}" onclick="toggle_video_status(${index})")">${task.Video_Update_Flag === 0 ? '已通过' : '未通过'}</button>
+                                                ` : '<button class="button-small status-failed" onclick="toggle_video_status(${index})")">未通过</button>'}
+                                            </div>
+                                        </div>
+                                    </td>
                                 </tr>
                             </table>
                         </div>
@@ -787,6 +898,11 @@ class AudioConverterGUI:
                     // 加载图片
                     if (task.Figure && task.Figure.filepath) {
                         load_image(index, task.Figure.filepath);
+                    }
+                    
+                    // 加载视频
+                    if (task.Video && task.Video.filepath) {
+                        load_video(index, task.Video.filepath);
                     }
                 } else {
                     container.innerHTML = `
@@ -813,7 +929,42 @@ class AudioConverterGUI:
                 if (result.success) {
                     const imageContainer = document.getElementById(`image-container-${index}`);
                     if (imageContainer) {
-                        imageContainer.innerHTML = `<img src="data:image/png;base64,${result.base64}" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+                        // 创建图片对象来获取尺寸
+                        const img = new Image();
+                        img.onload = function() {
+                            // 计算合适的显示尺寸
+                            const maxWidth = 320;
+                            const maxHeight = 320;
+                            let displayWidth = img.width;
+                            let displayHeight = img.height;
+                            
+                            // 计算宽高比
+                            const aspectRatio = img.width / img.height;
+                            
+                            // 根据宽高比调整尺寸
+                            if (img.width > maxWidth || img.height > maxHeight) {
+                                if (aspectRatio > 1) {
+                                    // 宽大于高，以宽度为基准
+                                    displayWidth = maxWidth;
+                                    displayHeight = Math.min(maxHeight, maxWidth / aspectRatio);
+                                } else {
+                                    // 高大于宽，以高度为基准
+                                    displayHeight = maxHeight;
+                                    displayWidth = Math.min(maxWidth, maxHeight * aspectRatio);
+                                }
+                            }
+                            
+                            // 设置容器大小
+                            imageContainer.style.width = displayWidth + 'px';
+                            imageContainer.style.height = displayHeight + 'px';
+                            
+                            // 显示图片
+                            imageContainer.innerHTML = `<img src="data:image/png;base64,${result.base64}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                        };
+                        img.onerror = function() {
+                            imageContainer.innerHTML = `<span style="color: #666;">图片加载失败</span>`;
+                        };
+                        img.src = 'data:image/png;base64,' + result.base64;
                     }
                 } else {
                     const imageContainer = document.getElementById(`image-container-${index}`);
@@ -881,6 +1032,101 @@ class AudioConverterGUI:
                 if (result.success) {
                     // 重新加载视频信息以更新状态
                     load_videos(index);
+                }
+            });
+        }
+        
+        // 切换视频状态
+        function toggle_video_status(index) {
+            window.pywebview.api.toggle_video_status(index).then(function(result) {
+                if (result.success) {
+                    // 重新加载视频信息以更新状态
+                    load_videos(index);
+                }
+            });
+        }
+        
+        // 加载视频
+        function load_video(index, filepath) {
+            // 检查文件是否存在
+            window.pywebview.api.check_file_exists(filepath).then(function(existsResult) {
+                if (existsResult.exists) {
+                    const videoContainer = document.getElementById(`video-display-${index}`);
+                    if (videoContainer) {
+                        // 使用base64编码加载视频
+                        window.pywebview.api.get_video_base64(filepath).then(function(result) {
+                            if (result.success) {
+                                // 创建视频元素
+                                const video = document.createElement('video');
+                                // 创建data URL
+                                const mimeType = result.extension === '.mp4' ? 'video/mp4' : 
+                                               result.extension === '.avi' ? 'video/avi' : 
+                                               result.extension === '.mov' ? 'video/quicktime' : 
+                                               result.extension === '.wmv' ? 'video/x-ms-wmv' : 
+                                               result.extension === '.flv' ? 'video/x-flv' : 
+                                               result.extension === '.mkv' ? 'video/x-matroska' : 'video/mp4';
+                                video.src = `data:${mimeType};base64,${result.base64}`;
+                                video.controls = true;
+                                video.style.width = '100%';
+                                video.style.height = '100%';
+                                video.style.objectFit = 'cover';
+                                
+                                // 清空容器
+                                videoContainer.innerHTML = '';
+                                
+                                // 当视频元数据加载完成后调整容器大小
+                                video.onloadedmetadata = function() {
+                                    // 计算合适的显示尺寸
+                                    const maxWidth = 320;
+                                    const maxHeight = 320;
+                                    let displayWidth = video.videoWidth;
+                                    let displayHeight = video.videoHeight;
+                                    
+                                    // 计算宽高比
+                                    const aspectRatio = video.videoWidth / video.videoHeight;
+                                    
+                                    // 根据宽高比调整尺寸
+                                    if (video.videoWidth > maxWidth || video.videoHeight > maxHeight) {
+                                        if (aspectRatio > 1) {
+                                            // 宽大于高，以宽度为基准
+                                            displayWidth = maxWidth;
+                                            displayHeight = Math.min(maxHeight, maxWidth / aspectRatio);
+                                        } else {
+                                            // 高大于宽，以高度为基准
+                                            displayHeight = maxHeight;
+                                            displayWidth = Math.min(maxWidth, maxHeight * aspectRatio);
+                                        }
+                                    }
+                                    
+                                    // 设置容器大小
+                                    videoContainer.style.width = displayWidth + 'px';
+                                    videoContainer.style.height = displayHeight + 'px';
+                                    videoContainer.style.display = 'flex';
+                                    videoContainer.style.alignItems = 'center';
+                                    videoContainer.style.justifyContent = 'center';
+                                    videoContainer.style.overflow = 'hidden';
+                                    
+                                    // 添加视频到容器
+                                    videoContainer.appendChild(video);
+                                };
+                                
+                                // 处理视频加载错误
+                                video.onerror = function() {
+                                    videoContainer.innerHTML = '<span style="color: #666;">视频加载失败</span>';
+                                    add_log('❌ 视频加载失败: 无法播放视频');
+                                };
+                            } else {
+                                videoContainer.innerHTML = '<span style="color: #666;">视频加载失败</span>';
+                                add_log('❌ 视频加载失败: ' + result.error);
+                            }
+                        });
+                    }
+                } else {
+                    const videoContainer = document.getElementById(`video-display-${index}`);
+                    if (videoContainer) {
+                        videoContainer.innerHTML = '<span style="color: #666;">视频不存在</span>';
+                    }
+                    add_log('❌ 视频不存在: ' + filepath);
                 }
             });
         }
@@ -1006,6 +1252,7 @@ class AudioConverterGUI:
             self.select_summary_file,
             self.set_autodl_token,
             self.set_instance_id,
+            self.import_config,
             self.batch_convert,
             self.play_audio,
             self.pass_task,
@@ -1016,7 +1263,10 @@ class AudioConverterGUI:
             self.get_prompt_details,
             self.toggle_prompt_status,
             self.toggle_figure_status,
+            self.toggle_video_status,
             self.get_image_base64,
+            self.get_video_base64,
+            self.check_file_exists,
             self.pass_subtitle,
             self.revert_subtitle,
             self.batch_convert_subtitles,
@@ -1110,105 +1360,22 @@ class AudioConverterGUI:
             if not file_path:
                 return {"success": False, "error": "未选择文件"}
             
-            # 读取并验证JSON文件
-            with open(file_path, 'r', encoding='utf-8') as f:
-                json_data = json.load(f)
+            # 调用通用函数加载JSON文件
+            result = self._load_json_file(file_path)
             
-            # 验证每个对象是否包含text字段
-            for item in json_data:
-                if not isinstance(item, dict):
-                    return {"success": False, "error": f"JSON文件格式无效：包含非对象元素"}
-                if "text" not in item:
-                    return {"success": False, "error": "JSON文件无效：缺少text字段"}
-                if not isinstance(item["text"], str):
-                    return {"success": False, "error": "JSON文件无效：text字段必须是字符串"}
-            
-            # 检查是否是第一次导入或结构不同
-            is_first_import = not self.json_file_path
-            is_structure_same = False
-            is_text_same = False
-            
-            if not is_first_import:
-                # 检查分镜结构是否相同
-                if len(json_data) == len(self.tasks):
-                    is_structure_same = True
-                    # 检查text字段是否相同
-                    is_text_same = True
-                    for i, item in enumerate(json_data):
-                        if i >= len(self.tasks):
-                            is_text_same = False
-                            break
-                        if item["text"] != self.tasks[i]["text"]:
-                            is_text_same = False
-                            break
-            
-            # 保存文件路径
-            self.json_file_path = file_path
-            
-            # 生成任务列表
-            new_tasks = []
-            for i, item in enumerate(json_data):
-                # 从JSON文件中读取音频路径
-                original_audio_path = item.get("audio", item.get("audio_path", None))
-                # 从JSON文件中读取字幕路径
-                new_srt_path = item.get("SRT_Path", item.get("srt_path", None))
-                
-                # 检查是否需要保留状态
-                if not is_first_import and is_structure_same and is_text_same and i < len(self.tasks):
-                    # 保留原有状态
-                    old_task = self.tasks[i]
-                    task = {
-                        "id": i,
-                        "text": item["text"],
-                        "duration": 0,  # 重置时长，因为可能是新的音频文件
-                        "status": old_task["status"],  # 保留原有状态
-                        "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
-                        "original_audio_path": original_audio_path,  # 保存原始音频路径
-                        "chapter": item.get("chapter", item.get("Chapter", "")),
-                        "description": item.get("description", item.get("Description", "")),
-                        "subtitles": old_task.get("subtitles", []),  # 保留原有字幕状态
-                        "srt_path": new_srt_path,  # 使用新导入的字幕文件路径
-                        "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
-                        "Prompt_Figure": item.get("Prompt_Figure", None),
-                        "Prompt_Video": item.get("Prompt_Video", None),
-                        "Figure": item.get("Figure", None),
-                        "Figure_Update_Flag": item.get("Figure_Update_Flag", 1)
-                    }
-                else:
-                    # 重置状态
-                    task = {
-                        "id": i,
-                        "text": item["text"],
-                        "duration": 0,
-                        "status": "未通过",
-                        "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
-                        "original_audio_path": original_audio_path,  # 保存原始音频路径
-                        "chapter": item.get("chapter", item.get("Chapter", "")),
-                        "description": item.get("description", item.get("Description", "")),
-                        "subtitles": [],  # 字幕列表
-                        "srt_path": new_srt_path,  # 使用新导入的字幕文件路径
-                        "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
-                        "Prompt_Figure": item.get("Prompt_Figure", None),
-                        "Prompt_Video": item.get("Prompt_Video", None),
-                        "Figure": item.get("Figure", None),
-                        "Figure_Update_Flag": item.get("Figure_Update_Flag", 1)
-                    }
-                new_tasks.append(task)
-            
-            # 更新任务列表
-            self.tasks = new_tasks
-            
-            # 将所有对象的text字段抽取出来保存为同名的.txt文件
-            txt_file_path = os.path.splitext(file_path)[0] + '.txt'
-            with open(txt_file_path, 'w', encoding='utf-8') as f:
-                for item in json_data:
-                    f.write(item["text"] + '\n')
-            
-            return {
-                "success": True,
-                "file_path": file_path,
-                "tasks": self.tasks
-            }
+            if result["success"]:
+                # 更新文件路径
+                self.json_file_path = file_path
+                # 更新任务列表
+                self.tasks = result["tasks"]
+                # 返回结果
+                return {
+                    "success": True,
+                    "file_path": file_path,
+                    "tasks": result["tasks"]
+                }
+            else:
+                return result
             
         except json.JSONDecodeError as e:
             return {"success": False, "error": f"JSON文件格式无效: {str(e)}"}
@@ -1392,6 +1559,124 @@ class AudioConverterGUI:
         except Exception as e:
             return {"success": False, "error": f"设置实例id失败: {str(e)}"}
     
+    def _load_json_file(self, file_path):
+        """
+        通用的 JSON 文件加载函数
+        :param file_path: JSON 文件路径
+        :return: 包含成功/失败信息的字典
+        """
+        try:
+            # 读取并验证JSON文件
+            with open(file_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            
+            # 验证每个对象是否包含text字段
+            for item in json_data:
+                if not isinstance(item, dict):
+                    return {"success": False, "error": f"JSON文件格式无效：包含非对象元素"}
+                if "text" not in item:
+                    return {"success": False, "error": "JSON文件无效：缺少text字段"}
+                if not isinstance(item["text"], str):
+                    return {"success": False, "error": "JSON文件无效：text字段必须是字符串"}
+            
+            # 生成任务列表
+            new_tasks = []
+            for i, item in enumerate(json_data):
+                # 从JSON文件中读取音频路径
+                original_audio_path = item.get("audio", item.get("audio_path", None))
+                # 从JSON文件中读取字幕路径
+                new_srt_path = item.get("SRT_Path", item.get("srt_path", None))
+                
+                # 通过Audio_Update_Flag字段确定状态
+                audio_update_flag = item.get("Audio_Update_Flag", 1)
+                status = "已通过" if audio_update_flag == 0 else "未通过"
+                
+                # 创建任务对象
+                task = {
+                    "id": i,
+                    "text": item["text"],
+                    "duration": 0,
+                    "status": status,
+                    "audio_path": original_audio_path,
+                    "original_audio_path": original_audio_path,
+                    "chapter": item.get("chapter", item.get("Chapter", "")),
+                    "description": item.get("description", item.get("Description", "")),
+                    "subtitles": [],
+                    "srt_path": new_srt_path,
+                    "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
+                    "Prompt_Figure": item.get("Prompt_Figure", None),
+                    "Prompt_Video": item.get("Prompt_Video", None),
+                    "Figure": item.get("Figure", None),
+                    "Figure_Update_Flag": item.get("Figure_Update_Flag", 1),
+                    "Video": item.get("Video", None),
+                    "Video_Update_Flag": item.get("Video_Update_Flag", 1),
+                    "Audio_Update_Flag": audio_update_flag
+                }
+                new_tasks.append(task)
+            
+            # 生成TXT文件
+            txt_file_path = os.path.splitext(file_path)[0] + '.txt'
+            with open(txt_file_path, 'w', encoding='utf-8') as f:
+                for item in json_data:
+                    f.write(item["text"] + '\n')
+            
+            return {
+                "success": True,
+                "tasks": new_tasks,
+                "file_path": file_path
+            }
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"JSON文件格式无效: {str(e)}"}
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            return {"success": False, "error": f"文件导入失败: {str(e)}\n详细错误: {error_detail}"}
+    
+    def import_config(self):
+        """
+        导入配置
+        """
+        try:
+            # 检查脚本同目录下是否存在AllInOneToolConfig.json文件
+            config_file_path = os.path.join(os.path.dirname(__file__), "AllInOneToolConfig.json")
+            
+            if not os.path.exists(config_file_path):
+                return {"success": False, "error": "没有找到配置文件"}
+            
+            # 读取并解析JSON文件
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            
+            # 检查是否包含所有必要的字段
+            required_fields = ["AudioServer", "SrtServer", "VideoServer", "AutoDL_Token", "AutoDL_ID"]
+            for field in required_fields:
+                if field not in config_data:
+                    return {"success": False, "error": "配置文件不完整"}
+            
+            # 更新配置
+            if "AudioServer" in config_data:
+                self.audio_server_url = config_data["AudioServer"]
+            if "SrtServer" in config_data:
+                self.subtitle_server_url = config_data["SrtServer"]
+            if "VideoServer" in config_data:
+                self.video_server_url = config_data["VideoServer"]
+            if "AutoDL_Token" in config_data:
+                self.autodl_token = config_data["AutoDL_Token"]
+            if "AutoDL_ID" in config_data:
+                self.instance_id = config_data["AutoDL_ID"]
+            
+            return {
+                "success": True,
+                "config": config_data
+            }
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"配置文件格式无效: {str(e)}"}
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            return {"success": False, "error": f"导入配置失败: {str(e)}"}
+
+    
     def batch_convert_subtitles(self, *args):
         """
         批量转换字幕
@@ -1543,48 +1828,19 @@ class AudioConverterGUI:
                     return {"success": False, "error": "未导入JSON文件"}
                 current_file_path = self.json_file_path
             
-            # 读取并验证JSON文件
-            with open(current_file_path, 'r', encoding='utf-8') as f:
-                json_data = json.load(f)
+            # 调用通用函数加载JSON文件
+            result = self._load_json_file(current_file_path)
             
-            # 验证每个对象是否包含text字段
-            for item in json_data:
-                if not isinstance(item, dict):
-                    return {"success": False, "error": f"JSON文件格式无效：包含非对象元素"}
-                if "text" not in item:
-                    return {"success": False, "error": "JSON文件无效：缺少text字段"}
-                if not isinstance(item["text"], str):
-                    return {"success": False, "error": "JSON文件无效：text字段必须是字符串"}
-            
-            # 生成任务列表
-            self.tasks = []
-            for i, item in enumerate(json_data):
-                # 从JSON文件中读取音频路径
-                original_audio_path = item.get("audio", item.get("audio_path", None))
-                
-                task = {
-                    "id": i,
-                    "text": item["text"],
-                    "duration": 0,
-                    "status": "未通过",
-                    "audio_path": original_audio_path,  # 初始使用JSON中的音频路径
-                    "original_audio_path": original_audio_path,  # 保存原始音频路径
-                    "chapter": item.get("chapter", item.get("Chapter", "")),
-                    "description": item.get("description", item.get("Description", "")),
-                    "subtitles": [],  # 字幕列表
-                    "srt_path": item.get("SRT_Path", item.get("srt_path", None)),  # 字幕文件路径
-                    "Prompt_Update_Flag": item.get("Prompt_Update_Flag", 1),
-                    "Prompt_Figure": item.get("Prompt_Figure", None),
-                    "Prompt_Video": item.get("Prompt_Video", None),
-                    "Figure": item.get("Figure", None),
-                    "Figure_Update_Flag": item.get("Figure_Update_Flag", 1)
+            if result["success"]:
+                # 更新任务列表
+                self.tasks = result["tasks"]
+                # 返回结果
+                return {
+                    "success": True,
+                    "tasks": result["tasks"]
                 }
-                self.tasks.append(task)
-            
-            return {
-                "success": True,
-                "tasks": self.tasks
-            }
+            else:
+                return result
             
         except json.JSONDecodeError as e:
             return {"success": False, "error": f"JSON文件格式无效: {str(e)}"}
@@ -2092,6 +2348,101 @@ class AudioConverterGUI:
             print(f"调试: 获取图片base64异常: {str(e)}")
             return {"success": False, "error": f"获取图片base64失败: {str(e)}"}
     
+    def get_video_base64(self, *args):
+        """
+        获取视频的base64编码
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                filepath = args[0][0]
+            elif len(args) == 1:
+                filepath = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(filepath, str):
+                return {"success": False, "error": "无效的文件路径"}
+            
+            # 检查文件是否存在
+            if not os.path.exists(filepath):
+                return {"success": False, "error": f"文件不存在: {filepath}"}
+            
+            # 检查文件是否是视频
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext not in ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']:
+                return {"success": False, "error": f"文件不是视频: {filepath}"}
+            
+            # 读取文件并转换为base64
+            with open(filepath, 'rb') as f:
+                import base64
+                base64_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            return {
+                "success": True,
+                "base64": base64_data,
+                "extension": ext
+            }
+        except Exception as e:
+            print(f"调试: 获取视频base64异常: {str(e)}")
+            return {"success": False, "error": f"获取视频base64失败: {str(e)}"}
+    
+    def toggle_video_status(self, *args):
+        """
+        切换视频状态
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                index = args[0][0]
+            elif len(args) == 1:
+                index = args[0]
+            else:
+                return {"success": False, "error": f"无效的参数数量: {len(args)}"}
+            
+            if not isinstance(index, int):
+                index = int(index)
+            
+            if index < 0 or index >= len(self.tasks):
+                return {"success": False, "error": "无效的任务索引"}
+            
+            task = self.tasks[index]
+            current_flag = task.get("Video_Update_Flag", 1)
+            # 切换状态
+            new_flag = 0 if current_flag == 1 else 1
+            task["Video_Update_Flag"] = new_flag
+            
+            return {
+                "success": True,
+                "new_status": new_flag
+            }
+        except Exception as e:
+            print(f"调试: 切换视频状态异常: {str(e)}")
+            return {"success": False, "error": f"切换视频状态失败: {str(e)}"}
+    
+    def check_file_exists(self, *args):
+        """
+        检查文件是否存在
+        """
+        try:
+            # 处理pywebview可能传递的元组参数
+            if len(args) == 1 and isinstance(args[0], (tuple, list)):
+                filepath = args[0][0]
+            elif len(args) == 1:
+                filepath = args[0]
+            else:
+                return {"exists": False}
+            
+            if not isinstance(filepath, str):
+                return {"exists": False}
+            
+            # 检查文件是否存在
+            exists = os.path.exists(filepath)
+            return {"exists": exists}
+        except Exception as e:
+            print(f"调试: 检查文件存在异常: {str(e)}")
+            return {"exists": False}
+    
     def pass_subtitle(self, *args):
         """
         通过字幕
@@ -2270,12 +2621,15 @@ class AudioConverterGUI:
             for task in self.tasks:
                 # 使用绝对路径作为audio字段
                 absolute_audio_path = os.path.abspath(task["audio_path"])
+                # 计算Audio_Update_Flag
+                audio_update_flag = 1 if task["status"] == "未通过" else 0
                 export_info.append({
                     "text": task["text"],
                     "audio": absolute_audio_path,
                     "duration": task["duration"],
                     "chapter": task["chapter"],
-                    "description": task["description"]
+                    "description": task["description"],
+                    "Audio_Update_Flag": audio_update_flag
                 })
             
             with open(export_info_path, 'w', encoding='utf-8') as f:
