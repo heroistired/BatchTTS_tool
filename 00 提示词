@@ -242,6 +242,17 @@
 1.5、然后按照之前代码逻辑继续执行
 
 【】
+帮我对AudioConverterGUI_pywebview.py的功能进行增强：
+1、在视频子表格的视频列的已通过/未通过按钮的下面，增加一个与按钮同宽的文本显示框：
+1.1、当分镜视频存在的时候，在文本显示框中显示视频的时长（单位为秒），如果不存在，则显示为空
+1.2、视频的时长要读取实际的视频文件来计算，不从其他地方获取
+
+【】
+帮我对AudioConverterGUI_pywebview.py的功能进行增强：
+1、点击优化字幕时：
+1.1、对于每个分镜，检查字幕状态，如果每一条字幕的状态都为已通过，则跳过这个分镜，不进行优化，否则，进行优化
+
+【】
 在BuzzAPI.py中实现一个批量转换音频到字幕文件的方法：
 1、接受一个json文件输入，其结构与ExportAudioInfo.json相同，根目录下有若干个分镜对象。
 2、接受服务器地址输入和输出文件夹路径输入
@@ -255,13 +266,6 @@
 1、在进行每一个分镜的字幕转换之前，检查一些该分镜json对象的SRT_Update_Flag字段：
 1.1、如果该字段不存在，或者字段的值为1，则进行字幕转换
 1.2、如果该字段的值为0，则跳过该分镜的字幕转换
-
-1、接受一个json文件输入，其结构与ExportAudioInfo.json相同，根目录下有若干个分镜对象。
-2、接受服务器地址输入和输出文件夹路径输入
-3、对于json文件的每个分镜json对象进行遍历：
-3.1、读取audio字段，如果指向的文件不存在，则提示并跳过，如果存在，将此文件作为音频文件输入结合服务器地址输入和输出文件夹路径输入，调用API进行字幕转换，将转换的字幕重命名为与audio字段指向的音频文件相同名字，保存在输出文件夹路径下，如果文件已存在，则覆盖源文件。
-4、全部转换完毕后，更新信息，写入新的json文件：将原来输入的json文件备份（名字后面加入时间戳），然后新的json文件与输入的json文件同名，并放在相同文件夹下，每一个分镜的json对象新增一个SRT_Path字段，存储对应分镜的字幕文件的绝对路径
-5、测试代码中，服务器地址设置为http://116.62.7.179:10002/ 、输入json文件为D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_audio\ExportAudioInfo.json，输出文件夹为：D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_audio
 
 
 
@@ -338,10 +342,45 @@
 00:00:09,000 --> 00:00:11,000
 这里却是位机似浮的战场
 
+【】
+在ConvertAudio.py里面实现一个ExportFullSRT函数（将每个分镜的SRT字幕文件合并成一个整体的字幕文件）：
+1、函数接受参数如下：
+1.1、一个json文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1\ExportAudioInfo.json）
+1.2、一个输出文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1）
+2、函数的功能如下：
+2.1、创建一个新的空白字幕文件（称之为主字幕文件）。
+2.1、遍历json文件中的每一个json对象（代表每一个分镜），读取其SRT_Path字段，并打开SRT_Path字段指示的字幕文件：
+2.2、如果是第一个分镜，则时间轴偏移为0，将SRT_Path字段指示的字幕文件追加到主字幕文件
+2.3、如果不是第一个分镜，则时间轴偏移为本分镜之前的所有分镜的duration字段值之和，以此时间轴偏移量，将SRT_Path字段指示的字幕文件追加到主字幕文件
+2.4、遍历完毕后，将主字幕文件保存到输出文件地址，文件名与json文件地址指示的json文件相同
 
+【】
+在ConvertAudio.py里面实现一个ProcessVideos函数（将每个分镜的视频处理为长度与音频一致）：
+1、函数接受参数如下：
+1.1、一个json文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1\ExportAudioInfo.json）
+1.2、一个输出文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1）
+2、函数的功能如下：
+2.1、遍历json文件中的每一个json对象（代表每一个分镜），读取其Video.filepath字段，并打开Video.filepath字段指示的视频文件（称之为分镜视频文件），读取其duration字段的值，称之为分镜时长：
+2.2、将分镜视频文件时长处理（通过等比慢放或者快放）为与分镜时长一致，然后将原分镜视频备份（改名为原文件名_时间戳），备份后，将处理完的新分镜视频保存在原分镜视频相同文件夹，名字与原文件名相同。
+2.3、遍历完毕后，将所有分镜的分镜视频文件（处理后的）合成为一个大视频，保存在输出文件夹，命名为ExportAudioInfo，如果文件已存在，则将旧文件备份（改名为原名字_时间戳）
+【】
+在ConvertAudio.py里面实现一个MergeAudioVideoSRT函数（将音频，字幕和视频压制为一个视频）：
+1、函数接受参数如下：
+1.1、一个json文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1\ExportAudioInfo.json）
+1.2、一个输出文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1）
+2、函数的功能如下：
+2.1、读取与json文件同目录的同名的音频（wav），视频（mp4）和字幕文件，并将三者压制为一个新的视频：
+2.2、将新的视频保存在输出文件夹，命名为与json文件相同，如果文件已存在，则将旧文件备份（改名为原名字_时间戳）
 
-
-
+【】
+在ConvertAudio.py里面实现一个ExportFullVideo函数（从json文件导出剪辑好的视频）：
+1、函数接受参数如下：
+1.1、一个json文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1\ExportAudioInfo.json）
+1.2、一个输出文件地址（测试函数中，用D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1）
+2、函数的功能如下：
+2.1、调用ExportFullSRT处理字幕
+2.2、调用ProcessVideos处理视频
+2.3、调用MergeAudioVideoSRT处理合成视频
 
 https://github.com/heroistired/BatchTTS_tool
 http://116.62.7.179:10001/ 文本转语音

@@ -937,10 +937,13 @@ class AudioConverterGUI:
                                             <div style="max-width: 320px; max-height: 320px; border: 1px solid #ddd; border-radius: 3px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #f0f0f0;">
                                                 ${task.Video && task.Video.filepath ? `<div id="video-display-${index}"><span style="color: #666;">加载视频中...</span></div>` : '<span style="color: #666;">无视频</span>'}
                                             </div>
-                                            <div>
+                                            <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
                                                 ${task.Video_Update_Flag !== undefined ? `
-                                                    <button class="button-small ${task.Video_Update_Flag === 0 ? 'status-passed' : 'status-failed'}" onclick="toggle_video_status(${index})")">${task.Video_Update_Flag === 0 ? '已通过' : '未通过'}</button>
-                                                ` : '<button class="button-small status-failed" onclick="toggle_video_status(${index})")">未通过</button>'}
+                                                    <button class="button-small ${task.Video_Update_Flag === 0 ? 'status-passed' : 'status-failed'}" onclick="toggle_video_status(${index})">${task.Video_Update_Flag === 0 ? '已通过' : '未通过'}</button>
+                                                ` : '<button class="button-small status-failed" onclick="toggle_video_status(${index})">未通过</button>'}
+                                                ${task.Video && task.Video.filepath ? `
+                                                    <div style="width: 80px; text-align: center; font-size: 12px; color: #666; margin-top: 5px;">${task.Video.duration ? `${task.Video.duration}秒` : '加载中...'}</div>
+                                                ` : ''}
                                             </div>
                                         </div>
                                     </td>
@@ -1616,6 +1619,52 @@ class AudioConverterGUI:
         except Exception as e:
             return {"success": False, "error": f"设置实例id失败: {str(e)}"}
     
+    def get_video_duration(self, video_path):
+        """
+        获取视频文件的实际时长（单位：秒）
+        :param video_path: 视频文件路径
+        :return: 视频时长（秒），失败返回0
+        """
+        try:
+            # 延迟导入OpenCV，避免未安装时的错误
+            import cv2
+            
+            # 检查视频文件是否存在
+            if not os.path.exists(video_path):
+                print(f"调试: 视频文件不存在: {video_path}")
+                return 0
+            
+            # 使用OpenCV打开视频
+            cap = cv2.VideoCapture(video_path)
+            
+            # 检查视频是否成功打开
+            if not cap.isOpened():
+                print(f"调试: 无法打开视频文件: {video_path}")
+                return 0
+            
+            # 获取视频总帧数
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            # 获取视频帧率
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            
+            # 计算视频时长（秒）
+            if fps > 0:
+                duration = total_frames / fps
+            else:
+                duration = 0
+            
+            # 关闭视频
+            cap.release()
+            
+            print(f"调试: 视频文件 {video_path} 时长: {duration} 秒")
+            return duration
+        except ImportError:
+            print("调试: 缺少OpenCV库，无法获取视频时长")
+            return 0
+        except Exception as e:
+            print(f"调试: 获取视频时长异常: {str(e)}")
+            return 0
+    
     def _load_json_file(self, file_path):
         """
         通用的 JSON 文件加载函数
@@ -1659,6 +1708,17 @@ class AudioConverterGUI:
                 # 获取SRT_Update_Flag字段
                 srt_update_flag = item.get("SRT_Update_Flag", 1)
                 
+                # 获取Video字段
+                video_info = item.get("Video", None)
+                
+                # 如果有视频文件，获取视频时长
+                if video_info and video_info.get("filepath"):
+                    video_path = video_info.get("filepath")
+                    # 获取视频时长
+                    video_duration = self.get_video_duration(video_path)
+                    # 将视频时长添加到Video字段中
+                    video_info["duration"] = round(video_duration, 2)
+                
                 # 创建任务对象
                 task = {
                     "id": i,
@@ -1676,7 +1736,7 @@ class AudioConverterGUI:
                     "Prompt_Video": item.get("Prompt_Video", None),
                     "Figure": item.get("Figure", None),
                     "Figure_Update_Flag": item.get("Figure_Update_Flag", 1),
-                    "Video": item.get("Video", None),
+                    "Video": video_info,
                     "Video_Update_Flag": item.get("Video_Update_Flag", 1),
                     "Audio_Update_Flag": audio_update_flag,
                     "SRT_Update_Flag": srt_update_flag
