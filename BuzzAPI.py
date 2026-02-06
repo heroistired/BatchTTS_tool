@@ -289,7 +289,13 @@ Buzz转录服务API类
             print(f"\n处理分镜: {scene_id}")
             print("-" * 60)
             
-            # 4.1 检查audio字段
+            # 4.1 检查SRT_Update_Flag字段
+            srt_update_flag = scene_data.get('SRT_Update_Flag', 1)
+            if srt_update_flag == 0:
+                print(f"分镜 {scene_id} 的SRT_Update_Flag为0，跳过字幕转换")
+                continue
+            
+            # 4.2 检查audio字段
             audio_path = scene_data.get('audio')
             if not audio_path:
                 print(f"警告: 分镜 {scene_id} 缺少audio字段，跳过")

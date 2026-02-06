@@ -241,6 +241,7 @@ class AudioConverterGUI:
                 <button id="export-btn" onclick="export_audio()" style="background-color: #FF9800; margin-left: 10px;">导出</button>
                 <button id="batch-subtitle-btn" onclick="batch_convert_subtitles()" style="background-color: #9C27B0; margin-left: 10px;">批量转换字幕</button>
                 <button id="optimize-subtitle-btn" onclick="optimize_subtitles()" style="background-color: #FF5722; margin-left: 10px;">优化字幕</button>
+                <button id="batch-generate-video-btn" onclick="batch_generate_video()" style="background-color: #4CAF50; margin-left: 10px;">批量生成视频</button>
                 <button id="batch-expand-subtitle-btn" onclick="batch_toggle_subtitles()" style="background-color: #607D8B; margin-left: 10px;">批量展开字幕</button>
                 <button id="batch-expand-video-btn" onclick="batch_toggle_videos()" style="background-color: #795548; margin-left: 10px;">批量展开视频</button>
             </div>
@@ -839,6 +840,61 @@ class AudioConverterGUI:
             button.textContent = isExpanded ? '批量展开视频' : '批量收起视频';
         }
         
+        // 批量生成视频
+        function batch_generate_video() {
+            const videoServerUrl = document.getElementById('video-server-url').value;
+            if (!videoServerUrl) {
+                add_log('⚠️ 请先设置视频服务器地址');
+                return;
+            }
+            
+            if (!document.getElementById('file-path').value) {
+                add_log('⚠️ 请先导入JSON文件');
+                return;
+            }
+            
+            const outputFolder = document.getElementById('output-folder').value;
+            if (!outputFolder) {
+                add_log('⚠️ 请先设置输出文件夹');
+                return;
+            }
+            
+            // 禁用按钮
+            const btn = document.getElementById('batch-generate-video-btn');
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+            
+            // 开始批量生成视频
+            window.pywebview.api.batch_generate_video().then(function(result) {
+                // 启用按钮
+                btn.disabled = false;
+                btn.textContent = '批量生成视频';
+                
+                if (result.success) {
+                    add_log('🎉 批量生成视频完成！');
+                    add_log(`📊 成功: ${result.success_count || '未知'}, 失败: ${result.error_count || 0}`);
+                    
+                    // 重新导入JSON文件以更新信息
+                    const filePath = document.getElementById('file-path').value;
+                    if (filePath) {
+                        add_log('🔄 重新导入JSON文件以更新视频信息');
+                        // 调用Python的重新导入方法
+                        window.pywebview.api.reimport_json_file().then(function(reimportResult) {
+                            if (reimportResult.success) {
+                                add_log('✅ JSON文件重新导入成功，信息已更新');
+                                // 更新表格显示
+                                update_table(reimportResult.tasks);
+                            } else {
+                                add_log('❌ JSON文件重新导入失败: ' + reimportResult.error);
+                            }
+                        });
+                    }
+                } else {
+                    add_log('❌ 批量生成视频失败: ' + result.error);
+                }
+            });
+        }
+        
         // 加载视频信息
         function load_videos(index) {
             window.pywebview.api.get_videos(index).then(function(result) {
@@ -1271,7 +1327,8 @@ class AudioConverterGUI:
             self.revert_subtitle,
             self.batch_convert_subtitles,
             self.reimport_json_file,
-            self.optimize_subtitles
+            self.optimize_subtitles,
+            self.batch_generate_video
         )
         
         # 启动GUI
@@ -1591,11 +1648,22 @@ class AudioConverterGUI:
                 audio_update_flag = item.get("Audio_Update_Flag", 1)
                 status = "已通过" if audio_update_flag == 0 else "未通过"
                 
+                # 从JSON文件中提取时长信息
+                duration = item.get("duration", item.get("Duration", 0))
+                # 确保duration是数字类型
+                try:
+                    duration = float(duration)
+                except (ValueError, TypeError):
+                    duration = 0
+                
+                # 获取SRT_Update_Flag字段
+                srt_update_flag = item.get("SRT_Update_Flag", 1)
+                
                 # 创建任务对象
                 task = {
                     "id": i,
                     "text": item["text"],
-                    "duration": 0,
+                    "duration": duration,
                     "status": status,
                     "audio_path": original_audio_path,
                     "original_audio_path": original_audio_path,
@@ -1610,7 +1678,8 @@ class AudioConverterGUI:
                     "Figure_Update_Flag": item.get("Figure_Update_Flag", 1),
                     "Video": item.get("Video", None),
                     "Video_Update_Flag": item.get("Video_Update_Flag", 1),
-                    "Audio_Update_Flag": audio_update_flag
+                    "Audio_Update_Flag": audio_update_flag,
+                    "SRT_Update_Flag": srt_update_flag
                 }
                 new_tasks.append(task)
             
@@ -1691,21 +1760,87 @@ class AudioConverterGUI:
             if not self.output_folder:
                 return {"success": False, "error": "未设置输出文件夹"}
             
-            # 导入BuzzAPI
+            # 1. 备份原来的json文件到输出文件夹
+            import time
+            import os
+            import json
+            
+            # 获取原json文件名和路径信息
+            json_dir = os.path.dirname(self.json_file_path)
+            json_basename = os.path.basename(self.json_file_path)
+            json_name, json_ext = os.path.splitext(json_basename)
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            backup_file_name = f"{json_name}_{timestamp}{json_ext}"
+            backup_file_path = os.path.join(self.output_folder, backup_file_name)
+            
+            # 读取原json文件内容
+            with open(self.json_file_path, 'r', encoding='utf-8') as f:
+                original_content = f.read()
+            
+            # 写入备份文件
+            with open(backup_file_path, 'w', encoding='utf-8') as f:
+                f.write(original_content)
+            print(f"已备份原JSON文件到: {backup_file_path}")
+            
+            # 2. 读取json文件数据
+            with open(self.json_file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # 3. 检查每个分镜的字幕状态并添加SRT_Update_Flag字段
+            for i, scene_data in enumerate(data):
+                # 优先使用内存中任务对象的字幕状态
+                if i < len(self.tasks):
+                    task = self.tasks[i]
+                    subtitles = task.get('subtitles', [])
+                    print(f"使用内存中任务对象的字幕状态，分镜 {i+1} 有 {len(subtitles)} 条字幕")
+                else:
+                    # 如果内存中没有对应任务，使用JSON文件中的数据
+                    subtitles = scene_data.get('subtitles', [])
+                    print(f"使用JSON文件中的字幕状态，分镜 {i+1} 有 {len(subtitles)} 条字幕")
+                
+                all_passed = True
+                
+                # 检查是否有字幕且所有字幕都已通过
+                if subtitles:
+                    passed_count = 0
+                    for subtitle in subtitles:
+                        status = subtitle.get('status')
+                        print(f"分镜 {i+1} 字幕 {subtitles.index(subtitle)+1} 状态: {status}")
+                        if status != '已通过':
+                            all_passed = False
+                        else:
+                            passed_count += 1
+                    print(f"分镜 {i+1} 已通过字幕数: {passed_count}/{len(subtitles)}")
+                else:
+                    # 没有字幕，视为未通过
+                    all_passed = False
+                    print(f"分镜 {i+1} 没有字幕，视为未通过")
+                
+                # 添加SRT_Update_Flag字段
+                scene_data['SRT_Update_Flag'] = 0 if all_passed else 1
+                print(f"分镜 {i+1} 的SRT_Update_Flag设置为: {scene_data['SRT_Update_Flag']}")
+            
+            # 4. 将全部分镜信息保存为新的json文件到输出文件夹
+            new_json_file_path = os.path.join(self.output_folder, json_basename)
+            with open(new_json_file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"已保存新的JSON文件到: {new_json_file_path}")
+            
+            # 5. 导入BuzzAPI
             try:
                 from BuzzAPI import batch_transcribe_from_json
             except ImportError:
                 return {"success": False, "error": "BuzzAPI模块导入失败"}
             
-            # 执行批量转换字幕
-            print(f"开始批量转换字幕: {self.json_file_path}")
+            # 6. 执行批量转换字幕
+            print(f"开始批量转换字幕: {new_json_file_path}")
             print(f"字幕服务器: {self.subtitle_server_url}")
             print(f"输出文件夹: {self.output_folder}")
             
-            # 调用BuzzAPI的批量转换函数
+            # 调用BuzzAPI的批量转换函数，使用新生成的json文件
             result = batch_transcribe_from_json(
                 server_url=self.subtitle_server_url,
-                json_file=self.json_file_path,
+                json_file=new_json_file_path,
                 output_folder=self.output_folder,
                 max_wait=600
             )
@@ -1721,6 +1856,8 @@ class AudioConverterGUI:
                 
         except Exception as e:
             print(f"批量转换字幕异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": f"批量转换字幕失败: {str(e)}"}
     
     def optimize_subtitles(self, *args):
@@ -1798,6 +1935,74 @@ class AudioConverterGUI:
         except Exception as e:
             print(f"优化字幕异常: {str(e)}")
             return {"success": False, "error": f"优化字幕失败: {str(e)}"}
+    
+    def batch_generate_video(self, *args):
+        """
+        批量生成视频
+        """
+        try:
+            if not self.video_server_url:
+                return {"success": False, "error": "未设置视频服务器地址"}
+            
+            if not self.json_file_path:
+                return {"success": False, "error": "未导入JSON文件"}
+            
+            if not self.output_folder:
+                return {"success": False, "error": "未设置输出文件夹"}
+            
+            if not self.autodl_token:
+                return {"success": False, "error": "未设置AutoDL网站token"}
+            
+            if not self.instance_id:
+                return {"success": False, "error": "未设置实例id"}
+            
+            # 读取视频梗概文件内容
+            summary_text = ""
+            if self.summary_file_path and os.path.exists(self.summary_file_path):
+                try:
+                    with open(self.summary_file_path, 'r', encoding='utf-8') as f:
+                        summary_text = f.read()
+                except Exception as e:
+                    print(f"读取视频梗概文件失败: {str(e)}")
+            
+            # 导入GenerateVideo模块
+            try:
+                import GenerateVideo
+            except ImportError:
+                return {"success": False, "error": "GenerateVideo模块导入失败"}
+            
+            # 执行批量生成视频
+            print(f"开始批量生成视频: {self.json_file_path}")
+            print(f"视频服务器: {self.video_server_url}")
+            print(f"输出文件夹: {self.output_folder}")
+            print(f"AutoDL token: {self.autodl_token}")
+            print(f"实例id: {self.instance_id}")
+            print(f"视频梗概内容长度: {len(summary_text)} 字符")
+            
+            # 调用GenerateVideo的批量生成函数
+            result = GenerateVideo.BatchGenerateAll_AutoDL_Management(
+                json_file_path=self.json_file_path,
+                save_dir=self.output_folder,
+                server_url=self.video_server_url,
+                autodl_token=self.autodl_token,
+                instance_id=self.instance_id,
+                video_summary=summary_text
+            )
+            
+            if result:
+                return {
+                    "success": True,
+                    "success_count": "未知",  # 需要根据GenerateVideo的返回值调整
+                    "error_count": 0
+                }
+            else:
+                return {"success": False, "error": "批量生成视频失败"}
+                
+        except Exception as e:
+            print(f"批量生成视频异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": f"批量生成视频失败: {str(e)}"}
     
     def reimport_json_file(self, *args):
         """
@@ -2151,17 +2356,25 @@ class AudioConverterGUI:
                                 
                                 text = ' '.join(text_lines)
                                 if text:
+                                    # 当前字幕的索引
+                                    current_index = len(subtitles)
+                                    
                                     # 检查字幕状态
-                                    subtitle_status = "未通过"
-                                    # 尝试从任务的subtitles列表中获取状态
+                                    # 1. 首先尝试从任务的subtitles列表中获取用户设置的状态
+                                    subtitle_status = None
                                     if "subtitles" in task:
                                         for sub in task["subtitles"]:
-                                            if sub.get("index") == len(subtitles):
-                                                subtitle_status = sub.get("status", "未通过")
+                                            if sub.get("index") == current_index:
+                                                subtitle_status = sub.get("status")
                                                 break
                                     
+                                    # 2. 如果没有用户设置的状态，使用SRT_Update_Flag作为初始状态
+                                    if subtitle_status is None:
+                                        srt_update_flag = task.get("SRT_Update_Flag", 1)
+                                        subtitle_status = "已通过" if srt_update_flag == 0 else "未通过"
+                                    
                                     subtitles.append({
-                                        "index": len(subtitles),
+                                        "index": current_index,
                                         "timestamp": timestamp_line,
                                         "text": text,
                                         "status": subtitle_status
@@ -2172,13 +2385,35 @@ class AudioConverterGUI:
                 print(f"调试: 解析SRT文件失败: {str(e)}")
                 return {"success": True, "subtitles": []}
             
+            # 确保任务的subtitles列表存在
+            if "subtitles" not in task:
+                task["subtitles"] = []
+            
+            # 合并字幕信息，保留用户设置的状态
+            # 创建现有状态的字典，以索引为键
+            existing_status = {}
+            if task["subtitles"]:
+                for sub in task["subtitles"]:
+                    if "index" in sub and "status" in sub:
+                        existing_status[sub["index"]] = sub["status"]
+            
+            # 更新或添加字幕信息
+            updated_subtitles = []
+            for sub in subtitles:
+                # 如果用户已经设置了状态，使用用户设置的状态
+                if sub["index"] in existing_status:
+                    sub["status"] = existing_status[sub["index"]]
+                updated_subtitles.append(sub)
+            
             # 更新任务的字幕信息
-            task["subtitles"] = subtitles
+            task["subtitles"] = updated_subtitles
             
             print(f"调试: 解析到 {len(subtitles)} 条字幕")
-            return {"success": True, "subtitles": subtitles}
+            return {"success": True, "subtitles": updated_subtitles}
         except Exception as e:
             print(f"调试: 获取字幕异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": f"获取字幕失败: {str(e)}"}
     
     def get_videos(self, *args):
