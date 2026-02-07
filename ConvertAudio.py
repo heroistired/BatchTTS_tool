@@ -281,15 +281,29 @@ def adjust_video_speed(video_path, target_duration, output_path):
         # 调整视频速度
         adjusted_clip = clip.with_speed_scaled(speed_factor)
         
-        # 保存调整后的视频
-        adjusted_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+        # 保存调整后的视频，添加更多参数以提高稳定性
+        adjusted_clip.write_videofile(
+            output_path, 
+            codec="libx264", 
+            audio_codec="aac",
+            fps=clip.fps,  # 使用原始帧率
+            preset="medium",  # 编码预设
+            threads=4,  # 使用多线程编码
+            ffmpeg_params=["-crf", "23"]  # 质量参数
+        )
         
         # 关闭视频
         clip.close()
         adjusted_clip.close()
         
-        print(f"✅ 视频速度调整完成，保存到: {output_path}")
-        return output_path
+        # 验证输出文件
+        if os.path.exists(output_path):
+            print(f"✅ 视频速度调整完成，保存到: {output_path}")
+            print(f"📁 输出文件大小: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
+            return output_path
+        else:
+            print(f"❌ 输出文件不存在: {output_path}")
+            return None
     except Exception as e:
         print(f"❌ 调整视频速度失败: {str(e)}")
         import traceback
@@ -421,11 +435,26 @@ def ProcessVideos(json_file_path, output_dir):
                 continue
             
             # 3.5 调整视频速度
-            # 使用原视频文件路径作为输出路径（覆盖原文件）
-            adjusted_video_path = adjust_video_speed(video_path, target_duration, video_path)
+            # 使用临时文件路径，避免覆盖原文件
+            temp_output_path = os.path.join(os.path.dirname(video_path), f"temp_{os.path.basename(video_path)}")
+            adjusted_video_path = adjust_video_speed(video_path, target_duration, temp_output_path)
             if not adjusted_video_path:
                 print(f"⚠️ 无法调整视频速度，跳过处理")
                 continue
+            
+            # 4. 等待文件写入完成，然后替换原文件
+            import time
+            time.sleep(1)  # 等待1秒确保文件写入完成
+            
+            # 替换原文件
+            try:
+                os.replace(temp_output_path, video_path)
+                print(f"✅ 成功替换原视频文件: {video_path}")
+                adjusted_video_path = video_path
+            except Exception as e:
+                print(f"⚠️ 无法替换原视频文件: {e}")
+                # 使用临时文件作为调整后的视频路径
+                adjusted_video_path = temp_output_path
             
             # 3.6 添加到处理后的视频列表
             processed_videos.append(adjusted_video_path)
@@ -571,49 +600,119 @@ def MergeAudioVideoSRT(json_file_path, output_dir):
             # 创建临时输出文件路径
             temp_output_path = os.path.splitext(output_path)[0] + "_temp" + os.path.splitext(output_path)[1]
             
-            # 切换到临时目录执行ffmpeg命令，避免路径问题
-            # 构建ffmpeg命令行参数，使用subtitles滤镜硬编码字幕
-            # 注意：在某些ffmpeg版本中，subtitles滤镜不支持直接设置样式参数
-            # 可以使用以下方法来控制字幕样式：
-            # 1. 使用ASS格式字幕文件，在文件中定义样式
-            # 2. 使用filter_complex组合多个滤镜
-            # 3. 使用drawtext滤镜手动绘制字幕
+            # 步骤1：获取视频和音频的长度
+            def get_media_duration(media_path, media_type):
+                """
+                获取媒体文件的长度
+                """
+                try:
+                    # 构建ffprobe命令
+                    ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), "ffprobe.exe")
+                    if not os.path.exists(ffprobe_path):
+                        print(f"❌ ffprobe可执行文件不存在: {ffprobe_path}")
+                        return None
+                    
+                    # 根据媒体类型构建命令
+                    cmd = [
+                        ffprobe_path,
+                        '-v', 'quiet',
+                        '-show_entries', 'format=duration',
+                        '-of', 'csv=p=0',
+                        media_path
+                    ]
+                    
+                    # 执行命令
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        check=True
+                    )
+                    
+                    # 解析结果
+                    duration = float(result.stdout.strip())
+                    print(f"✅ {media_type}长度: {duration:.2f} 秒")
+                    return duration
+                except Exception as e:
+                    print(f"❌ 获取{media_type}长度失败: {e}")
+                    return None
             
-            # 方法1：基本的subtitles滤镜（无样式控制）
-            # cmd = [
-            #     ffmpeg_path,
-            #     '-i', "v.mp4",
-            #     '-i', "a.wav",
-            #     '-vf', "subtitles=s.srt",
-            #     '-c:v', 'libx264',
-            #     '-c:a', 'aac',
-            #     '-shortest',
-            #     '-y',
-            #     "out.mp4"
-            # ]
+            # 获取视频和音频长度
+            video_duration = get_media_duration(temp_video, "视频")
+            audio_duration = get_media_duration(temp_audio, "音频")
             
-            # 方法2：使用filter_complex和subtitles滤镜（支持基本样式控制）
-            # 注意：不同ffmpeg版本支持的参数可能不同
+            # 步骤2：计算速度因子
+            speed_factor = 1.0
+            adjust_video = False
+            adjust_audio = False
+            
+            if video_duration and audio_duration:
+                if video_duration < audio_duration:
+                    # 视频较短，需要加速视频
+                    speed_factor = round(audio_duration / video_duration, 4)
+                    adjust_video = True
+                    print(f"⚡ 视频速度因子: {speed_factor}")
+                elif audio_duration < video_duration:
+                    # 音频较短，需要加速音频
+                    speed_factor = round(video_duration / audio_duration, 4)
+                    adjust_audio = True
+                    print(f"⚡ 音频速度因子: {speed_factor}")
+                else:
+                    print("✅ 视频和音频长度相同，无需调整速度")
+            
+            # 步骤3：构建ffmpeg命令
             # 使用force_style参数来调整字幕字体大小为27号
             force_style = "FontSize=27"
             
             # 添加scale滤镜将视频调整为1080P分辨率（1920x1080）
-            # 滤镜链：先调整分辨率，再添加字幕
-            filter_complex = f"[0:v]scale=1920:1080,subtitles=s.srt:force_style='{force_style}'[outv]"
-            
-            cmd = [
-                ffmpeg_path,
-                '-i', "v.mp4",
-                '-i', "a.wav",
-                '-filter_complex', filter_complex,
-                '-map', "[outv]",
-                '-map', "1:a",
-                '-c:v', 'libx264',
-                '-c:a', 'aac',
-                '-shortest',
-                '-y',  # 覆盖输出文件
-                "out.mp4"
-            ]
+            # 构建滤镜链
+            if adjust_video:
+                # 调整视频速度
+                filter_complex = f"[0:v]setpts=PTS/{speed_factor},scale=1920:1080,subtitles=s.srt:force_style='{force_style}'[outv]"
+                cmd = [
+                    ffmpeg_path,
+                    '-i', "v.mp4",
+                    '-i', "a.wav",
+                    '-filter_complex', filter_complex,
+                    '-map', "[outv]",
+                    '-map', "1:a",
+                    '-c:v', 'libx264',
+                    '-c:a', 'aac',
+                    '-y',  # 覆盖输出文件
+                    "out.mp4"
+                ]
+            elif adjust_audio:
+                # 调整音频速度
+                filter_complex = f"[0:v]scale=1920:1080,subtitles=s.srt:force_style='{force_style}'[outv]"
+                cmd = [
+                    ffmpeg_path,
+                    '-i', "v.mp4",
+                    '-i', "a.wav",
+                    '-filter_complex', filter_complex,
+                    '-map', "[outv]",
+                    '-map', "1:a",
+                    '-filter:a', f"atempo={speed_factor}",
+                    '-c:v', 'libx264',
+                    '-c:a', 'aac',
+                    '-y',  # 覆盖输出文件
+                    "out.mp4"
+                ]
+            else:
+                # 无需调整速度，使用原始的shortest参数
+                filter_complex = f"[0:v]scale=1920:1080,subtitles=s.srt:force_style='{force_style}'[outv]"
+                cmd = [
+                    ffmpeg_path,
+                    '-i', "v.mp4",
+                    '-i', "a.wav",
+                    '-filter_complex', filter_complex,
+                    '-map', "[outv]",
+                    '-map', "1:a",
+                    '-c:v', 'libx264',
+                    '-c:a', 'aac',
+                    '-shortest',
+                    '-y',  # 覆盖输出文件
+                    "out.mp4"
+                ]
             
             # 方法3：使用drawtext滤镜（完全控制样式，但需要解析字幕文件）
             # 这种方法需要手动解析SRT文件并为每个字幕创建drawtext滤镜
@@ -899,8 +998,11 @@ def test_MergeAudioVideoSRT():
     print("=== 测试MergeAudioVideoSRT函数 ===")
     
     # 测试参数
-    test_json_file = "D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1\ExportAudioInfo.json"
-    test_output_dir = "D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1"
+   # test_json_file = "D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1\ExportAudioInfo.json"
+   # test_output_dir = "D:\05 SelfMidea\98 SelfDevelopedTools\01 BatchTTS_tool\output_1"
+    # 使用原始字符串避免反斜杠被解释为转义字符
+    test_json_file = r"D:\05 SelfMidea\01 维基解密科普\13 全球风险报告策划\第二期\Output\ExportAudioInfo.json"
+    test_output_dir = r"D:\05 SelfMidea\01 维基解密科普\13 全球风险报告策划\第二期\Output"
     
     # 调用函数
     result_file = MergeAudioVideoSRT(test_json_file, test_output_dir)

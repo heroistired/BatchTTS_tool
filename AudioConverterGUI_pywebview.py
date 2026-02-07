@@ -242,6 +242,7 @@ class AudioConverterGUI:
                 <button id="batch-subtitle-btn" onclick="batch_convert_subtitles()" style="background-color: #9C27B0; margin-left: 10px;">批量转换字幕</button>
                 <button id="optimize-subtitle-btn" onclick="optimize_subtitles()" style="background-color: #FF5722; margin-left: 10px;">优化字幕</button>
                 <button id="batch-generate-video-btn" onclick="batch_generate_video()" style="background-color: #4CAF50; margin-left: 10px;">批量生成视频</button>
+                <button id="export-video-btn" onclick="export_video()" style="background-color: #FF5722; margin-left: 10px;">导出视频</button>
                 <button id="batch-expand-subtitle-btn" onclick="batch_toggle_subtitles()" style="background-color: #607D8B; margin-left: 10px;">批量展开字幕</button>
                 <button id="batch-expand-video-btn" onclick="batch_toggle_videos()" style="background-color: #795548; margin-left: 10px;">批量展开视频</button>
             </div>
@@ -895,6 +896,41 @@ class AudioConverterGUI:
             });
         }
         
+        // 导出视频
+        function export_video() {
+            if (!document.getElementById('file-path').value) {
+                add_log('⚠️ 请先导入JSON文件');
+                return;
+            }
+            
+            const outputFolder = document.getElementById('output-folder').value;
+            if (!outputFolder) {
+                add_log('⚠️ 请先设置输出文件夹');
+                return;
+            }
+            
+            // 禁用按钮
+            const btn = document.getElementById('export-video-btn');
+            btn.disabled = true;
+            btn.textContent = '导出中';
+            
+            // 开始导出视频
+            window.pywebview.api.export_video().then(function(result) {
+                // 启用按钮
+                btn.disabled = false;
+                btn.textContent = '导出视频';
+                
+                if (result.success) {
+                    add_log('🎉 视频导出成功！');
+                    add_log(`📁 导出文件: ${result.video_file}`);
+                } else {
+                    add_log('❌ 视频导出失败: ' + result.error);
+                    // 恢复按钮文字
+                    btn.textContent = '导出视频';
+                }
+            });
+        }
+        
         // 加载视频信息
         function load_videos(index) {
             window.pywebview.api.get_videos(index).then(function(result) {
@@ -1317,6 +1353,7 @@ class AudioConverterGUI:
             self.pass_task,
             self.revert_task,
             self.export_audio,
+            self.export_video,
             self.get_subtitles,
             self.get_videos,
             self.get_prompt_details,
@@ -2937,6 +2974,47 @@ class AudioConverterGUI:
             }
         except Exception as e:
             return {"success": False, "error": f"导出失败: {str(e)}"}
+    
+    def export_video(self, *args):
+        """
+        导出视频
+        """
+        try:
+            if not self.json_file_path:
+                return {"success": False, "error": "未导入JSON文件"}
+            
+            if not self.output_folder:
+                return {"success": False, "error": "未设置输出文件夹"}
+            
+            # 导入ConvertAudio模块
+            try:
+                import ConvertAudio
+            except ImportError:
+                return {"success": False, "error": "ConvertAudio模块导入失败"}
+            
+            # 执行导出视频
+            print(f"开始导出视频: {self.json_file_path}")
+            print(f"输出文件夹: {self.output_folder}")
+            
+            # 调用ConvertAudio的ExportFullVideo函数
+            result = ConvertAudio.ExportFullVideo(
+                json_file_path=self.json_file_path,
+                output_dir=self.output_folder
+            )
+            
+            if result:
+                return {
+                    "success": True,
+                    "video_file": result
+                }
+            else:
+                return {"success": False, "error": "视频导出失败"}
+                
+        except Exception as e:
+            print(f"导出视频异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": f"视频导出失败: {str(e)}"}
 
 # 运行GUI
 if __name__ == "__main__":

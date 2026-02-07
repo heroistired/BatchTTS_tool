@@ -226,6 +226,12 @@
 2、初始化时，此按钮文字为：“批量生成视频”。
 3、当按钮文字为：“批量生成视频”时，点击按钮：
 3.1、按钮文字变为“生成中”，并且，调用GenerateVideo.py的BatchGenerateAll_AutoDL_Management函数，将分镜信息json文件路径、输出文件夹路径、视频服务器地址、AutoDL网站token、实例id、视频梗概文件路径对应的文件的文本内容作为参数，当BatchGenerateAll_AutoDL_Management函数执行完毕，按钮文字变为“批量生成视频”。
+【】
+帮我对AudioConverterGUI_pywebview.py的功能进行增强：
+1、在操作区，批量生成视频按钮和批量展开/收起字幕按钮中间，加入一个导出视频按钮。
+2、初始化时，此按钮文字为：“导出视频”。
+3、当按钮文字为：“导出视频”时，点击按钮：
+3.1、按钮文字变为“导出中”，并且，调用ConvertAudio.py的ExportFullVideo函数，将分镜信息json文件路径、输出文件夹路径作为参数，当ExportFullVideo函数执行完毕，按钮文字变为“批量生成视频”。
 
 【】
 帮我对AudioConverterGUI_pywebview.py的功能进行增强：
