@@ -1968,17 +1968,46 @@ class AudioConverterGUI:
             if not self.tasks:
                 return {"success": False, "error": "没有任务需要优化"}
             
+            if not self.output_folder:
+                return {"success": False, "error": "未设置输出文件夹"}
+            
             # 导入ImproveSrtResultsLLM
             try:
                 from ImproveSrtResultsLLM import improve_srt
             except ImportError:
                 return {"success": False, "error": "ImproveSrtResultsLLM模块导入失败"}
             
+            # 1. 备份原来的json文件到输出文件夹
+            import time
+            import os
+            import json
+            
+            # 获取原json文件名和路径信息
+            json_dir = os.path.dirname(self.json_file_path)
+            json_basename = os.path.basename(self.json_file_path)
+            json_name, json_ext = os.path.splitext(json_basename)
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            backup_file_name = f"{json_name}_{timestamp}{json_ext}"
+            backup_file_path = os.path.join(self.output_folder, backup_file_name)
+            
+            # 读取原json文件内容
+            with open(self.json_file_path, 'r', encoding='utf-8') as f:
+                original_content = f.read()
+            
+            # 写入备份文件
+            with open(backup_file_path, 'w', encoding='utf-8') as f:
+                f.write(original_content)
+            print(f"已备份原JSON文件到: {backup_file_path}")
+            
+            # 2. 读取json文件数据
+            with open(self.json_file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
             success_count = 0
             error_count = 0
             total_tasks = len(self.tasks)
             
-            # 遍历每一个分镜
+            # 3. 遍历每一个分镜
             for i, task in enumerate(self.tasks):
                 try:
                     # 检查字幕状态是否有未通过的
@@ -1990,6 +2019,28 @@ class AudioConverterGUI:
                     if not srt_path or not os.path.exists(srt_path):
                         print(f"分镜 {i+1}: 没有找到SRT文件，跳过")
                         error_count += 1
+                        # 设置SRT_Update_Flag为1（未通过）
+                        if i < len(data):
+                            data[i]['SRT_Update_Flag'] = 1
+                        continue
+                    
+                    # 检查是否所有字幕都已通过
+                    all_passed = True
+                    if subtitles:
+                        for subtitle in subtitles:
+                            status = subtitle.get('status')
+                            if status != '已通过':
+                                all_passed = False
+                                break
+                    else:
+                        # 没有字幕，视为未通过
+                        all_passed = False
+                    
+                    # 如果所有字幕都已通过，跳过优化并设置SRT_Update_Flag为0
+                    if all_passed:
+                        print(f"分镜 {i+1}: 所有字幕都已通过，跳过优化")
+                        if i < len(data):
+                            data[i]['SRT_Update_Flag'] = 0
                         continue
                     
                     # 如果有未通过的字幕，进行优化
@@ -2005,6 +2056,9 @@ class AudioConverterGUI:
                         if not original_script:
                             print(f"分镜 {i+1}: 没有找到原始文稿，跳过")
                             error_count += 1
+                            # 设置SRT_Update_Flag为1（未通过）
+                            if i < len(data):
+                                data[i]['SRT_Update_Flag'] = 1
                             continue
                         
                         # 调用ImproveSrtResultsLLM进行优化
@@ -2016,12 +2070,27 @@ class AudioConverterGUI:
                         
                         print(f"分镜 {i+1}: 字幕优化成功")
                         success_count += 1
+                        # 优化后保持SRT_Update_Flag为1（需要用户确认通过）
+                        if i < len(data):
+                            data[i]['SRT_Update_Flag'] = 1
                     else:
-                        print(f"分镜 {i+1}: 所有字幕都已通过，跳过")
+                        print(f"分镜 {i+1}: 没有未通过的字幕，跳过")
+                        # 设置SRT_Update_Flag为1（未通过）
+                        if i < len(data):
+                            data[i]['SRT_Update_Flag'] = 1
                         
                 except Exception as e:
                     print(f"分镜 {i+1}: 优化失败 - {str(e)}")
                     error_count += 1
+                    # 异常情况下设置SRT_Update_Flag为1（未通过）
+                    if i < len(data):
+                        data[i]['SRT_Update_Flag'] = 1
+            
+            # 4. 将全部分镜信息保存为新的json文件到输出文件夹
+            new_json_file_path = os.path.join(self.output_folder, json_basename)
+            with open(new_json_file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"已保存更新后的JSON文件到: {new_json_file_path}")
             
             return {
                 "success": True,
@@ -2031,6 +2100,8 @@ class AudioConverterGUI:
             
         except Exception as e:
             print(f"优化字幕异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": f"优化字幕失败: {str(e)}"}
     
     def batch_generate_video(self, *args):
