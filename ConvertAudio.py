@@ -13,13 +13,112 @@ import shutil
 import json
 from datetime import datetime
 
+# 检查是否在打包环境中
+is_frozen = getattr(sys, 'frozen', False)
+
+# 在导入moviepy之前，先mock importlib.metadata，解决打包环境中的版本检查问题
+if is_frozen:
+    print("⚠️ 在打包环境中，添加importlib.metadata的mock模块...")
+    
+    # 创建一个更完整的mock importlib.metadata模块，支持huggingface_hub
+    class MockDistribution:
+        def version(self):
+            return "1.0.0"
+        
+        def requires(self):
+            return []
+        
+        def files(self):
+            return []
+        
+        def lookup(self, name):
+            return None
+    
+    class MockMetadataPathFinder:
+        @classmethod
+        def find_distributions(cls, context=None):
+            return []
+    
+    class MockImportlibMetadata:
+        def version(self, name):
+            # 为常见库返回版本号
+            version_map = {
+                'moviepy': '2.2.1',
+                'imageio': '2.34.0',
+                'numpy': '1.26.0',
+                'tqdm': '4.66.0',
+                'decorator': '5.1.1',
+                'imageio_ffmpeg': '0.4.9',
+                'huggingface_hub': '0.23.0',
+                'gradio_client': '1.0.0'
+            }
+            return version_map.get(name, "1.0.0")
+        
+        def distribution(self, name):
+            return MockDistribution()
+        
+        def packages_distributions(self):
+            return {}
+        
+        def files(self, name):
+            return []
+        
+        def distributions(self, context=None):
+            return []
+        
+        # 添加huggingface_hub需要的属性
+        MetadataPathFinder = MockMetadataPathFinder
+    
+    # 创建mock模块并添加到sys.modules
+    mock_metadata = MockImportlibMetadata()
+    sys.modules['importlib.metadata'] = mock_metadata
+    print("✅ importlib.metadata mock模块添加成功")
+
 # 尝试导入moviepy库，用于视频处理
+# 先定义变量，避免后续代码出错
+VideoFileClip = None
+concatenate_videoclips = None
+
+# 尝试导入moviepy库
 try:
+    # 首先尝试直接导入
     from moviepy.video.io.VideoFileClip import VideoFileClip
     from moviepy.video.compositing.CompositeVideoClip import concatenate_videoclips
-except ImportError:
-    print("⚠️ 缺少moviepy库，视频处理功能将不可用")
-    print("💡 请安装所需库: pip install moviepy")
+    print("✅ moviepy库导入成功！")
+except ImportError as e:
+    if "No module named 'moviepy'" in str(e):
+        # 确实缺少moviepy库
+        print("⚠️ 缺少moviepy库，视频处理功能将不可用")
+        print("💡 请安装所需库: pip install moviepy")
+    else:
+        # 可能是importlib.metadata问题，尝试使用备用方法
+        print(f"⚠️ moviepy库导入时遇到问题: {str(e)}")
+        print("💡 尝试备用导入方法...")
+        
+        # 尝试直接导入，绕过版本检查
+        try:
+            # 直接导入moviepy的核心模块
+            import sys
+            import os
+            
+            # 检查是否在打包环境中
+            if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+                # 在打包环境中，尝试从_MEIPASS目录导入
+                meipass_dir = sys._MEIPASS
+                # 添加MEIPASS目录到sys.path
+                sys.path.insert(0, meipass_dir)
+                print(f"📁 添加MEIPASS目录到路径: {meipass_dir}")
+            
+            # 尝试再次导入
+            from moviepy.video.io.VideoFileClip import VideoFileClip
+            from moviepy.video.compositing.CompositeVideoClip import concatenate_videoclips
+            print("✅ moviepy库导入成功（备用方法）！")
+        except ImportError:
+            print("⚠️ 备用导入方法也失败，视频处理功能将不可用")
+            print("💡 请安装所需库: pip install moviepy")
+            # 确保变量已定义
+            VideoFileClip = None
+            concatenate_videoclips = None
 
 # 尝试导入ffmpeg库，用于音视频压制
 try:
@@ -51,7 +150,7 @@ def get_ref_wav_path():
             return ref_wav_path
         
         # 如果在temp目录中，尝试查找
-        temp_dir = tempfile.gettemp()
+        temp_dir = tempfile.gettempdir()
         for root, dirs, files in os.walk(temp_dir):
             if '_MEI' in root and 'ref.WAV' in files:
                 return os.path.join(root, 'ref.WAV')

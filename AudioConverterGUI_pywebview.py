@@ -5,9 +5,10 @@
 音频转换GUI程序 - pywebview版本
 """
 
+import sys
+import os
 import webview
 import json
-import os
 import threading
 import re
 import subprocess
@@ -43,7 +44,7 @@ class AudioConverterGUI:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音频批量转换工具</title>
+    <title>解说视频一键生成工具</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -164,7 +165,7 @@ class AudioConverterGUI:
 </head>
 <body>
     <div class="container">
-        <h1>音频批量转换工具</h1>
+        <h1>解说视频一键生成工具</h1>
         
         <!-- 配置区 -->
         <div class="section">
@@ -236,15 +237,22 @@ class AudioConverterGUI:
             
             <!-- 批量转换、导出和字幕转换 -->
             <div class="form-row">
-                <label for="convert-btn">音频操作：</label>
-                <button id="convert-btn" onclick="batch_convert()" style="background-color: #2196F3;">批量转换</button>
+                <label for="convert-btn">视频操作：</label>
+                <button id="convert-btn" onclick="batch_convert()" style="background-color: #2196F3;">音频转换</button>
                 <button id="export-btn" onclick="export_audio()" style="background-color: #FF9800; margin-left: 10px;">导出</button>
-                <button id="batch-subtitle-btn" onclick="batch_convert_subtitles()" style="background-color: #9C27B0; margin-left: 10px;">批量转换字幕</button>
-                <button id="optimize-subtitle-btn" onclick="optimize_subtitles()" style="background-color: #FF5722; margin-left: 10px;">优化字幕</button>
-                <button id="batch-generate-video-btn" onclick="batch_generate_video()" style="background-color: #4CAF50; margin-left: 10px;">批量生成视频</button>
-                <button id="export-video-btn" onclick="export_video()" style="background-color: #FF5722; margin-left: 10px;">导出视频</button>
-                <button id="batch-expand-subtitle-btn" onclick="batch_toggle_subtitles()" style="background-color: #607D8B; margin-left: 10px;">批量展开字幕</button>
-                <button id="batch-expand-video-btn" onclick="batch_toggle_videos()" style="background-color: #795548; margin-left: 10px;">批量展开视频</button>
+                <button id="batch-subtitle-btn" onclick="batch_convert_subtitles()" style="background-color: #9C27B0; margin-left: 10px;">字幕转换</button>
+                <button id="optimize-subtitle-btn" onclick="optimize_subtitles()" style="background-color: #FF5722; margin-left: 10px;">字幕优化</button>
+                <button id="batch-generate-video-btn" onclick="batch_generate_video()" style="background-color: #4CAF50; margin-left: 10px;">视频生成</button>
+                <button id="export-video-btn" onclick="export_video()" style="background-color: #FF5722; margin-left: 10px;">视频导出</button>
+                <button id="play-video-btn" onclick="play_video()" style="background-color: #4CAF50; margin-left: 10px;">播放视频</button>
+                <button id="batch-expand-subtitle-btn" onclick="batch_toggle_subtitles()" style="background-color: #607D8B; margin-left: 10px;">展开字幕</button>
+                <button id="batch-expand-video-btn" onclick="batch_toggle_videos()" style="background-color: #795548; margin-left: 10px;">展开视频</button>
+            </div>
+            
+            <!-- 交付视频 -->
+            <div class="form-row">
+                <label for="delivery-video-btn">&nbsp;</label>
+                <button id="delivery-video-btn" onclick="delivery_video()" style="background-color: #2196F3;">交付视频</button>
             </div>
             
             <!-- 日志输出 -->
@@ -931,6 +939,89 @@ class AudioConverterGUI:
             });
         }
         
+        // 播放视频
+        function play_video() {
+            add_log('🔍 开始执行播放视频函数');
+            
+            try {
+                add_log('📁 检查JSON文件路径');
+                const filePath = document.getElementById('file-path').value;
+                add_log(`📄 JSON文件路径: ${filePath}`);
+                
+                if (!filePath) {
+                    add_log('⚠️ 请先导入JSON文件');
+                    return;
+                }
+                
+                add_log('📁 检查输出文件夹');
+                const outputFolder = document.getElementById('output-folder').value;
+                add_log(`📄 输出文件夹: ${outputFolder}`);
+                
+                if (!outputFolder) {
+                    add_log('⚠️ 请先设置输出文件夹');
+                    return;
+                }
+                
+                add_log('🚀 调用Python API播放视频');
+                // 开始播放视频
+                window.pywebview.api.play_video().then(function(result) {
+                    add_log(`📡 API返回结果: ${JSON.stringify(result)}`);
+                    if (result.success) {
+                        add_log('▶️ 视频播放中...');
+                    } else {
+                        add_log('❌ 视频播放失败: ' + result.error);
+                    }
+                }).catch(function(error) {
+                    add_log('❌ API调用失败: ' + error.message);
+                });
+            } catch (error) {
+                add_log('❌ JavaScript执行错误: ' + error.message);
+                add_log('📋 错误堆栈: ' + error.stack);
+            }
+        }
+        
+        // 交付视频
+        function delivery_video() {
+            add_log('🔍 开始执行交付视频函数');
+            
+            try {
+                add_log('📁 检查JSON文件路径');
+                const filePath = document.getElementById('file-path').value;
+                add_log(`📄 JSON文件路径: ${filePath}`);
+                
+                if (!filePath) {
+                    add_log('⚠️ 请先导入JSON文件');
+                    return;
+                }
+                
+                add_log('📁 检查输出文件夹');
+                const outputFolder = document.getElementById('output-folder').value;
+                add_log(`📄 输出文件夹: ${outputFolder}`);
+                
+                if (!outputFolder) {
+                    add_log('⚠️ 请先设置输出文件夹');
+                    return;
+                }
+                
+                add_log('🚀 调用Python API交付视频');
+                // 开始交付视频
+                window.pywebview.api.delivery_video().then(function(result) {
+                    add_log(`📡 API返回结果: ${JSON.stringify(result)}`);
+                    if (result.success) {
+                        add_log('📦 视频交付成功！');
+                        add_log(`📁 交付文件: ${result.delivery_file}`);
+                    } else {
+                        add_log('❌ 视频交付失败: ' + result.error);
+                    }
+                }).catch(function(error) {
+                    add_log('❌ API调用失败: ' + error.message);
+                });
+            } catch (error) {
+                add_log('❌ JavaScript执行错误: ' + error.message);
+                add_log('📋 错误堆栈: ' + error.stack);
+            }
+        }
+        
         // 加载视频信息
         function load_videos(index) {
             window.pywebview.api.get_videos(index).then(function(result) {
@@ -1354,6 +1445,8 @@ class AudioConverterGUI:
             self.revert_task,
             self.export_audio,
             self.export_video,
+            self.play_video,
+            self.delivery_video,
             self.get_subtitles,
             self.get_videos,
             self.get_prompt_details,
@@ -2964,10 +3057,10 @@ class AudioConverterGUI:
             
             # 确定导出文件保存路径
             if self.output_folder:
-                base_audio_path = os.path.join(self.output_folder, "ExportAudio.wav")
+                base_audio_path = os.path.join(self.output_folder, "ExportAudioInfo.wav")
                 base_info_path = os.path.join(self.output_folder, "ExportAudioInfo.json")
             else:
-                base_audio_path = "ExportAudio.wav"
+                base_audio_path = "ExportAudioInfo.wav"
                 base_info_path = "ExportAudioInfo.json"
             
             # 处理同名文件备份
@@ -3086,6 +3179,102 @@ class AudioConverterGUI:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": f"视频导出失败: {str(e)}"}
+    
+    def play_video(self, *args):
+        """
+        播放视频
+        """
+        try:
+            if not self.json_file_path:
+                return {"success": False, "error": "未导入JSON文件"}
+            
+            if not self.output_folder:
+                return {"success": False, "error": "未设置输出文件夹"}
+            
+            # 构建视频文件路径（基于JSON文件名）
+            json_filename = os.path.basename(self.json_file_path)
+            base_name = os.path.splitext(json_filename)[0]
+            video_file_path = os.path.join(self.output_folder, f"{base_name}.mp4")
+            
+            # 检查视频文件是否存在
+            if not os.path.exists(video_file_path):
+                # 尝试在JSON文件所在目录查找
+                json_dir = os.path.dirname(self.json_file_path)
+                video_file_path = os.path.join(json_dir, f"{base_name}.mp4")
+                if not os.path.exists(video_file_path):
+                    return {"success": False, "error": f"视频文件不存在: {video_file_path}"}
+            
+            # 使用系统默认播放器播放视频
+            print(f"播放视频: {video_file_path}")
+            subprocess.Popen([video_file_path], shell=True)
+            return {"success": True}
+        except Exception as e:
+            print(f"播放视频异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+    
+    def delivery_video(self, *args):
+        """
+        交付视频
+        将输出文件夹下的ExportAudioInfo.mp4复制到输出文件夹下的Delivery文件夹下
+        并命名为"原文件名_Delivery_时间戳"
+        """
+        try:
+            if not self.json_file_path:
+                return {"success": False, "error": "未导入JSON文件"}
+            
+            if not self.output_folder:
+                return {"success": False, "error": "未设置输出文件夹"}
+            
+            # 构建视频文件路径
+            json_filename = os.path.basename(self.json_file_path)
+            base_name = os.path.splitext(json_filename)[0]
+            video_file_path = os.path.join(self.output_folder, f"{base_name}.mp4")
+            
+            # 检查视频文件是否存在
+            if not os.path.exists(video_file_path):
+                # 尝试查找ExportAudioInfo.mp4
+                video_file_path = os.path.join(self.output_folder, "ExportAudioInfo.mp4")
+                if not os.path.exists(video_file_path):
+                    # 尝试在JSON文件所在目录查找
+                    json_dir = os.path.dirname(self.json_file_path)
+                    video_file_path = os.path.join(json_dir, f"{base_name}.mp4")
+                    if not os.path.exists(video_file_path):
+                        video_file_path = os.path.join(json_dir, "ExportAudioInfo.mp4")
+                        if not os.path.exists(video_file_path):
+                            return {"success": False, "error": f"视频文件不存在: ExportAudioInfo.mp4"}
+            
+            # 创建Delivery文件夹
+            delivery_folder = os.path.join(self.output_folder, "Delivery")
+            if not os.path.exists(delivery_folder):
+                os.makedirs(delivery_folder)
+                print(f"创建Delivery文件夹: {delivery_folder}")
+            
+            # 生成时间戳
+            import time
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            
+            # 构建交付文件名
+            original_filename = os.path.basename(video_file_path)
+            original_base_name = os.path.splitext(original_filename)[0]
+            delivery_filename = f"{original_base_name}_Delivery_{timestamp}.mp4"
+            delivery_file_path = os.path.join(delivery_folder, delivery_filename)
+            
+            # 复制视频文件
+            import shutil
+            shutil.copy2(video_file_path, delivery_file_path)
+            print(f"复制视频文件到: {delivery_file_path}")
+            
+            return {
+                "success": True,
+                "delivery_file": delivery_file_path
+            }
+        except Exception as e:
+            print(f"交付视频异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
 
 # 运行GUI
 if __name__ == "__main__":
